@@ -17,9 +17,12 @@
     "collect:cases": "tsx scripts/collect_lawgo_case.ts",
     "collect:sync-manifest": "tsx scripts/update_manifest_from_collected.ts",
     "collect:all": "npm run collect:law && npm run collect:cases && npm run collect:sync-manifest",
-    "ingest:collected": "tsx src/cli/ingest_collected.ts"
+    "ingest:collected": "tsx src/cli/ingest_collected.ts",
+    "parse:sample": "tsx scripts/parse_sample.ts",
+    "ingest:sample": "tsx src/cli/ingest_sample.ts"
   },
   "dependencies": {
+    "@qdrant/js-client-rest": "^1.17.0",
     "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.7.2",

@@ -9,28 +9,71 @@
 - **Backend**: Node.js + Express (CommonJS)
 - **Auth/Session**: `express-session` + SQLite (세션 쿠키 기반)
 - **Client ID**: 회원가입 시 유저별 `client_id` 부여 → 로그인 시 세션에 유지
-- **RAG**: 문서 chunking → Ollama embeddings → SQLite에 저장 → cosine similarity 검색
+- **RAG**: 문서 chunking → Ollama embeddings → **SQLite(기본) 또는 Qdrant** 벡터 검색
+- **Vector DB**: SQLite(소규모) ↔ **Qdrant**(대규모) 선택 가능 — `VECTOR_STORE=qdrant`로 전환
 - **Frontend**: Tailwind CDN + Offcanvas(좌측 슬라이딩) + 로그인/회원가입 + Chat UI
-- **데모 문서**: `data/raw/` (법령/판례 "예시" 문서 다수 포함)
+- **Sample 데이터셋**: `Sample.zip` — 결정례/법령/판결문/해석례 (원천 CSV + AI 라벨 QA/SUM JSON)
 
 ---
 
 ## 0) 요구사항
-- Docker (Ollama 컨테이너 구동)
-- Node.js 18+ (권장 20+)
+- **Docker** (풀 스택: app + Qdrant + Ollama)
+- Node.js 24+ (로컬 개발)
 
 ---
 
-## 1) 빠른 시작
+## 1) 빠른 시작 — Docker 풀 스택 (권장)
 
-### 1-1. Ollama 실행 (Docker)
+### 1-1. 환경 설정
+```bash
+cp .env.example .env
+# 필요 시 .env 수정 (SESSION_SECRET 등)
+```
+
+### 1-2. SQLite 벡터 스토어로 전체 스택 실행
+```bash
+docker compose up -d ollama qdrant app
+```
+
+모델 자동 pull (첫 실행 1회):
+```bash
+docker compose run --rm model-pull
+```
+
+### 1-3. Sample 데이터 인덱싱 (첫 실행 1회)
+```bash
+# Sample.zip을 압축 해제
+unzip Sample.zip
+
+# Docker 컨테이너에서 sample 인제스트
+docker compose run --rm ingest
+```
+
+- 웹: http://localhost:8000
+- Qdrant Dashboard: http://localhost:6333/dashboard
+
+### 1-4. Qdrant 벡터 DB로 전환 (대용량 데이터 권장)
+`.env`에서 설정:
+```
+VECTOR_STORE=qdrant
+QDRANT_URL=http://qdrant:6333
+```
+그 후 재실행:
+```bash
+docker compose up -d
+docker compose run --rm ingest
+```
+
+---
+
+## 2) 로컬 개발 (Docker 없이)
+
+### 2-1. Ollama 실행 (Docker)
 ```bash
 docker compose up -d ollama
 ```
 
-### 1-2. 모델 준비 (호스트에서 1회)
-Ollama 컨테이너가 떠 있으면 아래로 pull 가능합니다.
-
+### 2-2. 모델 준비 (1회)
 ```bash
 # LLM (답변용)
 docker exec -it ollama ollama pull llama3.1
@@ -39,11 +82,7 @@ docker exec -it ollama ollama pull llama3.1
 docker exec -it ollama ollama pull nomic-embed-text
 ```
 
-> 기본값:  
-> - LLM_MODEL = `llama3.1`  
-> - EMBED_MODEL = `nomic-embed-text`
-
-### 1-3. API 서버 실행
+### 2-3. API 서버 실행
 ```bash
 cp .env.example .env
 npm install
@@ -55,7 +94,7 @@ npm run dev
 
 ---
 
-## 2) 사용 흐름
+## 3) 사용 흐름
 1) 브라우저 접속 → 회원가입 → 로그인  
 2) (앱 화면) **Ingest** 메뉴에서 `데모 문서 인덱싱` 실행  
 3) **Chat** 메뉴에서 질문 → 근거 인용된 답변 확인  
@@ -63,7 +102,37 @@ npm run dev
 
 ---
 
-## 3) RAG 인덱싱(서버에서 실행)
+## 4) Sample 데이터셋 (법령/판결/해석/결정 AI 라벨)
+
+`Sample.zip`은 **국가 법령 AI 학습 데이터셋** 샘플입니다:
+
+| 폴더 | 유형 | 파일 형식 |
+|------|------|-----------|
+| `01.원천데이터/법령` | 법령 전문 | CSV |
+| `01.원천데이터/판결문` | 판결 전문 | CSV |
+| `01.원천데이터/해석례` | 법제처 해석례 | CSV |
+| `01.원천데이터/결정례` | 헌재 결정례 | CSV |
+| `02.라벨링데이터/*/QA` | 질의응답 쌍 | JSON |
+| `02.라벨링데이터/*/SUM` | 요약 레이블 | JSON |
+
+### 파싱 → 인덱싱
+```bash
+# 1) Sample.zip 압축 해제 (루트 폴더에 Sample/ 생성)
+unzip Sample.zip
+
+# 2) CSV/JSON → 마크다운 변환 + manifest.json 업데이트
+npm run parse:sample
+
+# 3) 임베딩 + 벡터 DB 인덱싱
+npm run ingest:sample
+```
+
+`parse:sample`은 `data/raw/sample/` 아래 문서 유형별 마크다운을 생성하고  
+`data/manifest.json`에 항목을 자동 추가합니다.
+
+---
+
+## 5) RAG 인덱싱(서버에서 실행)
 
 ### 방법 A) UI에서 실행
 - 좌측 메뉴 Ingest → "데모 문서 인덱싱" 버튼 클릭
@@ -75,7 +144,7 @@ npm run ingest
 
 ---
 
-## 4) 환경변수 (.env)
+## 6) 환경변수 (.env)
 `.env.example` 참고
 
 - `OLLAMA_BASE_URL` : 기본 `http://127.0.0.1:11434`
@@ -83,10 +152,13 @@ npm run ingest
 - `EMBED_MODEL` : 임베딩 모델
 - `SESSION_SECRET` : 세션 암호화 키
 - `SQLITE_PATH` : `./data/app.db`
+- `VECTOR_STORE` : `sqlite`(기본) 또는 `qdrant`
+- `QDRANT_URL` : Qdrant REST 주소 (기본 `http://localhost:6333`)
+- `QDRANT_COLLECTION` : Qdrant 컬렉션 이름 (기본 `law_chunks`)
 
 ---
 
-## 5) 문서 추가 방법
+## 7) 문서 추가 방법
 - `data/raw/law/` : 법령 발췌/요약/체크리스트
 - `data/raw/cases/` : 판례 요약(사실관계/쟁점/판단/시사점)
 
@@ -94,7 +166,7 @@ npm run ingest
 
 ---
 
-## 6) API 요약
+## 8) API 요약
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
@@ -105,16 +177,16 @@ npm run ingest
 
 ---
 
-## 7) 보안/가드레일
+## 9) 보안/가드레일
 - 불법행위 조장/증거조작/위법 회피/타인 권리 침해 등 요청은 거절합니다.
 - 최신성/관할 불확실 시 추가 질문을 우선합니다.
 - 답변에는 항상 **근거 인용** 블록이 포함됩니다.
 
 ---
 
-## 8) 개발 팁
-- 임베딩/검색은 데모용으로 SQLite + 메모리 cosine 계산을 사용합니다.
-  - 문서가 매우 많아지면 벡터DB(Chroma/Qdrant 등)로 교체하세요.
+## 10) 개발 팁
+- 기본 벡터 스토어는 **SQLite + 메모리 cosine 계산**입니다 (소규모·로컬 개발에 적합).
+- 문서가 많아지면 `VECTOR_STORE=qdrant`로 전환하세요. Qdrant는 **코사인 유사도 HNSW 인덱스**를 사용하여 수백만 벡터도 고속 검색합니다.
 - Tailwind는 CDN 방식이라 빌드 없이 즉시 동작합니다.
 
 ---

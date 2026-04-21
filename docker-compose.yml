@@ -1,11 +1,119 @@
 services:
+  # ─────────────────────────────
+  # Ollama – local LLM / embeddings
+  # ─────────────────────────────
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
     ports:
       - "11434:11434"
     volumes:
-      - ollama:/root/.ollama
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─────────────────────────────
+  # Qdrant – vector database
+  # ─────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─────────────────────────────
+  # Model pull (one-shot init)
+  # ─────────────────────────────
+  model-pull:
+    image: ollama/ollama:latest
+    container_name: model-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ollama_data:/root/.ollama
+    entrypoint: >
+      sh -c "
+        ollama pull ${LLM_MODEL:-llama3.1} &&
+        ollama pull ${EMBED_MODEL:-nomic-embed-text} &&
+        echo 'Models ready.'
+      "
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+    restart: "no"
+
+  # ─────────────────────────────
+  # App – Node.js RAG API server
+  # ─────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: law-rag-app
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - QDRANT_URL=http://qdrant:6333
+      # Set VECTOR_STORE=qdrant to use Qdrant, or sqlite (default) for SQLite
+      - VECTOR_STORE=${VECTOR_STORE:-sqlite}
+    volumes:
+      - app_data:/app/data
+    depends_on:
+      ollama:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ─────────────────────────────
+  # Ingest job – indexes sample data on startup (optional / one-shot)
+  # Run manually:  docker compose run --rm ingest
+  # ─────────────────────────────
+  ingest:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: law-rag-ingest
+    env_file: .env
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - QDRANT_URL=http://qdrant:6333
+      - VECTOR_STORE=${VECTOR_STORE:-sqlite}
+    volumes:
+      - app_data:/app/data
+      # Mount host Sample/ folder so the ingest job can read it
+      - ./Sample:/app/Sample:ro
+    depends_on:
+      ollama:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    entrypoint: ["node", "dist/src/cli/ingest_sample.js"]
+    restart: "no"
 
 volumes:
-  ollama:
+  ollama_data:
+  qdrant_data:
+  app_data:
+

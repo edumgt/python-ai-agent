@@ -8,6 +8,12 @@ import { parseLawMeta, parseCaseMeta } from "./metadata_parser.service";
 import { audit } from "./audit.service";
 import type { OllamaClient } from "../lib/ollama";
 import type { AuditParams } from "./audit.service";
+import {
+  resolveVectorStoreBackend,
+  resolveQdrantUrl,
+  resolveQdrantCollection,
+} from "../lib/vector_store";
+import { createQdrantStore } from "../lib/qdrant";
 
 function walkFiles(dir: string): string[] {
   const out: string[] = [];
@@ -138,6 +144,13 @@ export async function ingestDirectory({
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
+  // Qdrant backend (optional)
+  const vectorBackend = resolveVectorStoreBackend();
+  const qdrant =
+    vectorBackend === "qdrant"
+      ? createQdrantStore(resolveQdrantUrl(), resolveQdrantCollection())
+      : null;
+
   let chunkTotal = 0;
 
   for (const d of docs) {
@@ -181,10 +194,23 @@ export async function ingestDirectory({
       `[DOC] ${d.docId}@v${d.version} roles=${d.allowedRoles.join(",")} ${d.source} -> ${chunks.length} chunks`
     );
 
+    // Qdrant: delete existing points for this doc/version before upserting
+    if (qdrant) {
+      await qdrant.deleteByDocVersion(d.docId, d.version);
+    }
+
+    const qdrantBatch: Array<{
+      id: string;
+      vector: number[];
+      payload: import("../lib/qdrant").QdrantPayload;
+    }> = [];
+
     for (let idx = 0; idx < chunks.length; idx++) {
       const c = chunks[idx];
       const contentHash = sha256(`${d.docId}|${d.version}|${idx}|${c}`);
       const emb = await ollama.embed({ model: embedModel, input: c });
+      // Capture timestamp after the (potentially slow) embed call
+      const now = new Date().toISOString();
 
       const chunkMeta = {
         docId: d.docId,
@@ -199,23 +225,69 @@ export async function ingestDirectory({
         chunkIndex: idx,
       };
 
-      insChunk.run(
-        d.source,
-        d.docType,
-        d.title,
-        c,
-        JSON.stringify(emb),
-        JSON.stringify(chunkMeta),
-        new Date().toISOString(),
-        d.docId,
-        d.version,
-        d.effectiveDate,
-        d.jurisdiction,
-        contentHash,
-        idx,
-        docRowId
-      );
+      if (qdrant) {
+        // Store vector in Qdrant; keep lightweight row in SQLite for doc linkage
+        qdrantBatch.push({
+          id: contentHash,
+          vector: emb,
+          payload: {
+            source: d.source,
+            doc_type: d.docType,
+            title: d.title ?? null,
+            text: c,
+            doc_id: d.docId,
+            doc_version: d.version,
+            effective_date: d.effectiveDate ?? null,
+            jurisdiction: d.jurisdiction,
+            allowed_roles: d.allowedRoles,
+            chunk_index: idx,
+            content_hash: contentHash,
+            created_at: now,
+          },
+        });
+        insChunk.run(
+          d.source,
+          d.docType,
+          d.title,
+          c,
+          "[]", // Embedding stored in Qdrant; placeholder keeps SQLite row valid for doc lineage
+          JSON.stringify(chunkMeta),
+          now,
+          d.docId,
+          d.version,
+          d.effectiveDate,
+          d.jurisdiction,
+          contentHash,
+          idx,
+          docRowId
+        );
+      } else {
+        insChunk.run(
+          d.source,
+          d.docType,
+          d.title,
+          c,
+          JSON.stringify(emb),
+          JSON.stringify(chunkMeta),
+          new Date().toISOString(),
+          d.docId,
+          d.version,
+          d.effectiveDate,
+          d.jurisdiction,
+          contentHash,
+          idx,
+          docRowId
+        );
+      }
       chunkTotal++;
+    }
+
+    // Flush Qdrant batch for this document
+    if (qdrant && qdrantBatch.length) {
+      if (qdrantBatch[0].vector.length > 0) {
+        await qdrant.ensureCollection(qdrantBatch[0].vector.length);
+      }
+      await qdrant.upsertPoints(qdrantBatch);
     }
   }
 

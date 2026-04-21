@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+data/app.db
+data/app.db-shm
+data/app.db-wal
+data/collected
+*.log
+.git

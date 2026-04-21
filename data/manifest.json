@@ -80,6 +80,70 @@
       "court": "DEMO",
       "decision_date": "2025-06-01",
       "case_no": "DEMO-CASE"
+    },
+    {
+      "doc_id": "DECISION-77",
+      "doc_type": "decision",
+      "title": "기피신청",
+      "jurisdiction": "KR",
+      "effective_date": "2002-04-25",
+      "version": 1,
+      "path": "data/raw/sample/HS_K_77_기피신청.md",
+      "allowed_roles": [
+        "user",
+        "admin"
+      ],
+      "caseNum": "2002헌사154",
+      "caseCode": "헌사",
+      "courtCode": "전원재판부"
+    },
+    {
+      "doc_id": "LAW-6",
+      "doc_type": "law",
+      "title": "여권법",
+      "jurisdiction": "KR",
+      "effective_date": "2024-02-09",
+      "version": 1,
+      "path": "data/raw/sample/HS_B_000006_여권법.md",
+      "allowed_roles": [
+        "user",
+        "admin"
+      ],
+      "ministry": "외교부",
+      "smClass": "제2조",
+      "promulgDate": "20230808"
+    },
+    {
+      "doc_id": "CASE-64516",
+      "doc_type": "case",
+      "title": "변호인퇴실명령에대한준항고",
+      "jurisdiction": "KR",
+      "effective_date": "2008-07-14",
+      "version": 1,
+      "path": "data/raw/sample/HS_P_64516_변호인퇴실명령에대한준항고.md",
+      "allowed_roles": [
+        "user",
+        "admin"
+      ],
+      "caseNum": "2008보5",
+      "courtName": "인천지방법원",
+      "caseTypeName": "형사"
+    },
+    {
+      "doc_id": "INTERP-311551",
+      "doc_type": "interpretation",
+      "title": "경찰청 - 「도로교통법」 제87조(개정된 정기적성검사기간의 소급적용 여부) 관련",
+      "jurisdiction": "KR",
+      "effective_date": "2008-02-01",
+      "version": 1,
+      "path": "data/raw/sample/HS_H_311551_경찰청 - 「도로교통법」 제87조(개정된 정기적성검사기간의 소급적용 여부) 관련.md",
+      "allowed_roles": [
+        "user",
+        "admin"
+      ],
+      "agendaNum": "07-0479",
+      "interpreMinName": "법제처",
+      "questionMinName": "경찰청 교통관리관 교통기획담당관"
     }
   ]
 }

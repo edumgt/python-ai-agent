@@ -1,6 +1,12 @@
 import type { Database } from "better-sqlite3";
 import { cosine } from "../lib/vector";
 import type { OllamaClient } from "../lib/ollama";
+import {
+  resolveVectorStoreBackend,
+  resolveQdrantUrl,
+  resolveQdrantCollection,
+} from "../lib/vector_store";
+import { createQdrantStore } from "../lib/qdrant";
 
 export interface Chunk {
   id: number;
@@ -95,6 +101,71 @@ export async function retrieve({
   userRoles?: string[];
 }): Promise<ScoredChunk[]> {
   const qEmb = await ollama.embed({ model: embedModel, input: query });
+
+  const vectorBackend = resolveVectorStoreBackend();
+
+  if (vectorBackend === "qdrant") {
+    return retrieveFromQdrant(qEmb, topK, userRoles);
+  }
+
+  return retrieveFromSqlite(db, qEmb, topK, userRoles);
+}
+
+async function retrieveFromQdrant(
+  qEmb: number[],
+  topK: number,
+  userRoles: string[]
+): Promise<ScoredChunk[]> {
+  const qdrant = createQdrantStore(resolveQdrantUrl(), resolveQdrantCollection());
+  const strategy = (process.env.DOC_VERSION_STRATEGY || "latest").toLowerCase();
+
+  // For "latest" strategy we fetch more candidates and filter client-side,
+  // because Qdrant does not natively know the max version per doc_id.
+  const fetchK = strategy === "latest" ? topK * 5 : topK;
+
+  const results = await qdrant.search(qEmb, fetchK);
+
+  let candidates = results.filter((r) => {
+    const allowed: string[] = r.payload.allowed_roles || ["user", "admin"];
+    return userRoles.some((role) => allowed.includes(role));
+  });
+
+  if (strategy === "latest") {
+    // Find max version per doc_id
+    const mv = new Map<string, number>();
+    for (const r of candidates) {
+      const k = r.payload.doc_id || r.payload.source;
+      const cur = mv.get(k);
+      if (cur == null || r.payload.doc_version > cur) mv.set(k, r.payload.doc_version);
+    }
+    candidates = candidates.filter((r) => {
+      const k = r.payload.doc_id || r.payload.source;
+      return r.payload.doc_version === mv.get(k);
+    });
+  }
+
+  return candidates.slice(0, topK).map((r) => ({
+    id: typeof r.id === "number" ? r.id : 0,
+    source: r.payload.source,
+    docType: r.payload.doc_type,
+    title: r.payload.title ?? null,
+    text: r.payload.text,
+    embedding: [],
+    docId: r.payload.doc_id ?? null,
+    docVersion: r.payload.doc_version,
+    effectiveDate: r.payload.effective_date ?? null,
+    jurisdiction: r.payload.jurisdiction ?? null,
+    allowedRoles: r.payload.allowed_roles || ["user", "admin"],
+    score: r.score,
+  }));
+}
+
+function retrieveFromSqlite(
+  db: Database,
+  qEmb: number[],
+  topK: number,
+  userRoles: string[]
+): ScoredChunk[] {
   const all = loadAllChunks(db);
 
   // RBAC filter
