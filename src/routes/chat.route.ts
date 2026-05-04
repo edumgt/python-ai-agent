@@ -21,20 +21,25 @@ export function createChatRouter({ db }: { db: Database }): express.Router {
       const question = String(req.body?.question || "").trim();
       if (!question) return res.status(400).json({ error: "question is required" });
 
-      // 대화 히스토리 (선택적)
+      // 대화 히스토리 (선택적) — 최대 20개 메시지, 콘텐츠 5000자 제한
+      const MAX_HISTORY_MESSAGES = 20;
+      const MAX_CONTENT_LENGTH = 5000;
       const rawHistory: unknown = req.body?.history;
       const history: ConversationMessage[] = Array.isArray(rawHistory)
         ? (rawHistory as unknown[])
+            .slice(0, MAX_HISTORY_MESSAGES)
             .filter(
               (h): h is ConversationMessage =>
                 h !== null &&
                 typeof h === "object" &&
+                typeof (h as ConversationMessage).content === "string" &&
+                (h as ConversationMessage).content.length <= MAX_CONTENT_LENGTH &&
                 (
                   (h as ConversationMessage).role === "user" ||
                   (h as ConversationMessage).role === "assistant"
                 )
             )
-            .map((h) => ({ role: h.role, content: String(h.content || "") }))
+            .map((h) => ({ role: h.role, content: h.content }))
         : [];
 
       const user  = req.session.user!;

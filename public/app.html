@@ -233,10 +233,16 @@
     const chatMessages = document.getElementById("chatMessages");
     const qEl = document.getElementById("q");
     const askBtn = document.getElementById("askBtn");
+    const MAX_HISTORY_MESSAGES = 20;
     let conversationHistory = [];
 
     function escHtml(s) {
-      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return String(s || "")
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;")
+        .replace(/'/g,"&#39;");
     }
 
     function renderActionLabel(action) {
@@ -361,8 +367,8 @@
 
         conversationHistory.push({ role: "user", content: question });
         conversationHistory.push({ role: "assistant", content: res.answer });
-        // Keep history to last 10 turns to avoid token overflow
-        if (conversationHistory.length > 20) conversationHistory = conversationHistory.slice(-20);
+        // Keep history to last MAX_HISTORY_MESSAGES messages to avoid token overflow
+        if (conversationHistory.length > MAX_HISTORY_MESSAGES) conversationHistory = conversationHistory.slice(-MAX_HISTORY_MESSAGES);
 
         appendAssistantMessage(res.answer, res.steps, res.citations);
       } catch (e) {

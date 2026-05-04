@@ -195,7 +195,7 @@ async function runAgentLoop({
   const allDocs: ScoredChunk[] = [];
   const seenIds = new Set<number>();
 
-  for (let i = 0; i < MAX_AGENT_STEPS; i++) {
+  for (let stepIndex = 0; stepIndex < MAX_AGENT_STEPS; stepIndex++) {
     const raw = await ollama.chat({
       model: llmModel,
       messages,
