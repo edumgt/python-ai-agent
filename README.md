@@ -14,7 +14,8 @@
 5. [환경변수](#환경변수)
 6. [AWS 이관 가이드](#aws-이관-가이드)
 7. [Qdrant 구성 제안](#qdrant-구성-제안)
-8. [주요 화면](#주요-화면)
+8. [Qdrant 데이터 공유 방법](#qdrant-데이터-공유-방법)
+9. [주요 화면](#주요-화면)
 
 ---
 
@@ -317,6 +318,121 @@ create_payload_index("fin_chunks", "crawled_at", PayloadSchemaType.DATETIME)
 - **Qdrant Cluster 모드**: shard 수 = (총 벡터 수 / 200만) × replication factor
 - **메모리**: 768차원 float32 × 벡터 수 × 1.5 (HNSW 오버헤드)
 - **스냅샷 백업**: S3에 주기적 스냅샷 (`POST /collections/{name}/snapshots`)
+
+---
+
+## Qdrant 데이터 공유 방법
+
+### Docker 이미지만으로는 데이터가 공유되지 않는 이유
+
+이 프로젝트의 Qdrant 컨테이너는 **named volume**을 사용합니다 (`docker-compose.yml`):
+
+```yaml
+qdrant:
+  volumes:
+    - qdrant_data:/qdrant/storage   # named volume
+```
+
+Named volume은 Docker 이미지 레이어 **외부**에 존재합니다.  
+따라서 `docker push` / `docker pull`로 이미지만 공유하면 크롤링·인제스트로 적재한 벡터 데이터는 전달되지 않습니다.  
+데이터를 함께 전달하려면 아래 세 가지 방법 중 하나를 선택하세요.
+
+---
+
+### 방법 1 — Volume tarball 추출 (권장)
+
+가장 간단한 방법으로, volume 전체를 압축 파일 하나로 내보냅니다.
+
+**① 내보내기 (공유하는 쪽)**
+
+```bash
+# Qdrant 컨테이너를 먼저 중지해 파일 정합성 보장
+docker compose stop qdrant
+
+docker run --rm \
+  -v qdrant_data:/qdrant/storage \
+  -v $(pwd):/backup \
+  busybox tar czf /backup/qdrant_data.tar.gz -C /qdrant/storage .
+
+# 완료 후 재기동
+docker compose start qdrant
+```
+
+생성된 `qdrant_data.tar.gz` 파일을 상대방에게 전달합니다.
+
+**② 불러오기 (받는 쪽)**
+
+```bash
+# 1. Named volume 생성
+docker volume create qdrant_data
+
+# 2. tarball 압축 해제 후 volume에 적재
+docker run --rm \
+  -v qdrant_data:/qdrant/storage \
+  -v $(pwd):/backup \
+  busybox tar xzf /backup/qdrant_data.tar.gz -C /qdrant/storage
+
+# 3. 전체 스택 기동
+docker compose up -d
+```
+
+> **주의**: `docker compose up -d` 실행 전에 volume을 복원해야 Qdrant가 기동 시 데이터를 올바르게 인식합니다.
+
+---
+
+### 방법 2 — Qdrant Snapshot API (공식 방식)
+
+Qdrant가 내장한 스냅샷 기능으로, **컬렉션 단위**로 선택적 공유가 가능합니다.
+
+**① 스냅샷 생성 및 다운로드 (공유하는 쪽)**
+
+```bash
+# 스냅샷 생성 (컬렉션명: fin_chunks)
+curl -X POST http://localhost:6333/collections/fin_chunks/snapshots
+
+# 생성된 스냅샷 목록 확인
+curl http://localhost:6333/collections/fin_chunks/snapshots
+# 응답 예시: {"result":[{"name":"fin_chunks-123456789.snapshot", ...}]}
+
+# 스냅샷 파일 다운로드
+curl -O http://localhost:6333/collections/fin_chunks/snapshots/fin_chunks-123456789.snapshot
+```
+
+**② 복원 (받는 쪽)**
+
+```bash
+# Qdrant 기동 후, 스냅샷을 업로드하여 컬렉션 복원
+curl -X POST 'http://localhost:6333/collections/fin_chunks/snapshots/upload?priority=snapshot' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'snapshot=@fin_chunks-123456789.snapshot'
+```
+
+컬렉션이 없으면 자동 생성되고, 이미 있으면 스냅샷 내용으로 덮어씁니다.
+
+> **여러 컬렉션이 있는 경우** 각 컬렉션마다 위 명령을 반복하거나,  
+> 전체 스토리지 수준 백업은 방법 1(tarball)을 사용하세요.
+
+---
+
+### 방법 3 — 이미지에 데이터 굽기 (비권장)
+
+```dockerfile
+FROM qdrant/qdrant:latest
+COPY ./qdrant_storage /qdrant/storage
+```
+
+배포는 단순해지나, 데이터가 클수록 이미지가 비대해지고  
+데이터 업데이트 시마다 이미지를 다시 빌드·푸시해야 하므로 권장하지 않습니다.
+
+---
+
+### 방법 비교
+
+| 방법 | 공유 단위 | 장점 | 단점 |
+|---|---|---|---|
+| **Volume tarball** | 전체 storage | 명령 2개로 완전 복원, 추가 도구 불필요 | 컨테이너 중지 필요, 파일이 클 수 있음 |
+| **Snapshot API** | 컬렉션 단위 | Qdrant 공식, 선택적·점진적 공유 가능 | 컬렉션이 여러 개면 반복 작업 필요 |
+| **이미지에 굽기** | 이미지 전체 | 이미지 하나로 배포 완결 | 이미지 비대화, 데이터 갱신 불편 |
 
 ---
 
