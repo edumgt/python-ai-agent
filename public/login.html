@@ -3,49 +3,58 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>로그인 | Law RAG Agent</title>
+  <title>로그인 | 금융 AI Agent</title>
+  <link rel="icon" href="/favicon.ico" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    input, textarea, select { color: #f1f5f9 !important; }
+    input::placeholder, textarea::placeholder { color: #64748b; }
+  </style>
 </head>
-<body class="min-h-screen bg-slate-950 text-slate-100">
-  <div class="max-w-md mx-auto px-6 py-16">
-    <a href="/" class="text-slate-300 hover:text-white text-sm">← 홈</a>
-    <h1 class="mt-6 text-2xl font-semibold">로그인</h1>
-    <p class="mt-2 text-sm text-slate-300">세션 쿠키 기반 로그인. 로그인 후 Client ID가 세션에 유지됩니다.</p>
+<body class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+  <div class="w-full max-w-md px-6 py-12">
+    <div class="text-center mb-8">
+      <div class="text-3xl font-bold text-indigo-400">💹 금융 AI Agent</div>
+      <div class="mt-2 text-sm text-slate-400">AI 기반 금융 분석 · 주가 · 퀀트 매매 플랫폼</div>
+    </div>
 
-    <div data-toast class="hidden mt-4 px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-sm"></div>
+    <!-- Toast는 common.js setToast()가 body에 동적 생성 -->
 
-    <form id="f" class="mt-8 space-y-4">
-      <div>
-        <label class="text-sm text-slate-300">이메일</label>
-        <input name="email" type="email" required class="mt-2 w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="you@example.com" />
+    <div class="rounded-2xl border border-white/10 bg-white/5 p-8">
+      <h1 class="text-xl font-semibold mb-6">로그인</h1>
+      <form id="f" class="space-y-4">
+        <div>
+          <label class="text-sm text-slate-400">이메일</label>
+          <input name="email" type="email" required
+            class="mt-2 w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-100"
+            placeholder="you@example.com" />
+        </div>
+        <div>
+          <label class="text-sm text-slate-400">비밀번호</label>
+          <input name="password" type="password" required
+            class="mt-2 w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-100"
+            placeholder="••••••••" />
+        </div>
+        <button type="submit"
+          class="w-full py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold transition">
+          로그인
+        </button>
+      </form>
+      <div class="mt-6 text-center text-sm text-slate-400">
+        계정이 없나요? <a class="text-indigo-400 hover:text-indigo-300" href="/register.html">회원가입</a>
       </div>
-      <div>
-        <label class="text-sm text-slate-300">비밀번호</label>
-        <input name="password" type="password" required class="mt-2 w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="••••••••" />
-      </div>
-
-      <button class="w-full px-4 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-semibold">로그인</button>
-    </form>
-
-    <div class="mt-6 text-sm text-slate-300">
-      계정이 없나요? <a class="text-indigo-300 hover:text-indigo-200" href="/register.html">회원가입</a>
     </div>
   </div>
 
   <script type="module">
     import { api, setToast } from "/js/common.js";
-
-    const f = document.getElementById("f");
-    f.addEventListener("submit", async (e) => {
+    document.getElementById("f").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const fd = new FormData(f);
+      const fd = new FormData(e.target);
       try {
         await api("/api/auth/login", {
           method: "POST",
-          body: {
-            email: fd.get("email"),
-            password: fd.get("password")
-          }
+          body: { email: fd.get("email"), password: fd.get("password") },
         });
         location.href = "/app.html";
       } catch (err) {

@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Law RAG Agent</title>
+  <title>금융 AI Agent</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-slate-950 text-slate-100">
   <div class="max-w-5xl mx-auto px-6 py-14">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-3xl font-semibold tracking-tight">Law RAG Agent</h1>
+        <h1 class="text-3xl font-semibold tracking-tight">💹 금융 AI Agent</h1>
         <p class="mt-3 text-slate-300 leading-relaxed">
-          Ollama(로컬) + 법령/판례 중심 RAG + 세션 기반 로그인 + Offcanvas UI 데모
+          Python/FastAPI · Ollama(로컬 LLM) · 개인/기업 CB 분석 · 주가 · 퀀트 자동매매 플랫폼
         </p>
       </div>
       <div class="flex gap-2">
@@ -23,29 +23,29 @@
 
     <div class="mt-10 grid md:grid-cols-3 gap-4">
       <div class="rounded-2xl border border-white/10 bg-white/5 p-5">
-        <div class="text-sm text-slate-300">핵심</div>
-        <div class="mt-2 font-semibold">근거 기반 답변</div>
-        <p class="mt-2 text-sm text-slate-300 leading-relaxed">답변은 항상 문서 근거(인용 블록)와 함께 제공합니다.</p>
+        <div class="text-sm text-slate-300">🤖 AI Agent</div>
+        <div class="mt-2 font-semibold">ReAct 루프 기반 분석</div>
+        <p class="mt-2 text-sm text-slate-300 leading-relaxed">개인CB·기업CB·금융상품 데이터를 자연어로 질의합니다.</p>
       </div>
       <div class="rounded-2xl border border-white/10 bg-white/5 p-5">
-        <div class="text-sm text-slate-300">실무형</div>
-        <div class="mt-2 font-semibold">인테이크 질문</div>
-        <p class="mt-2 text-sm text-slate-300 leading-relaxed">사실관계가 부족하면 먼저 확인 질문을 생성합니다.</p>
+        <div class="text-sm text-slate-300">📈 주가·퀀트</div>
+        <div class="mt-2 font-semibold">RSI·MACD·볼린저밴드</div>
+        <p class="mt-2 text-sm text-slate-300 leading-relaxed">실시간 주가 및 10분 주기 퀀트 자동매매 Mockup을 제공합니다.</p>
       </div>
       <div class="rounded-2xl border border-white/10 bg-white/5 p-5">
-        <div class="text-sm text-slate-300">세션</div>
-        <div class="mt-2 font-semibold">Client ID 유지</div>
-        <p class="mt-2 text-sm text-slate-300 leading-relaxed">로그인 시 세션에 사용자별 Client ID를 유지합니다.</p>
+        <div class="text-sm text-slate-300">🕷️ RAG</div>
+        <div class="mt-2 font-semibold">크롤링 + Qdrant</div>
+        <p class="mt-2 text-sm text-slate-300 leading-relaxed">GitHub docs 크롤링 후 벡터 DB에 저장, 질의 시 인용 근거를 제공합니다.</p>
       </div>
     </div>
 
     <div class="mt-12 rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-6">
       <div class="text-slate-200 font-semibold">바로 시작</div>
       <ol class="mt-3 text-sm text-slate-300 space-y-2 list-decimal list-inside">
-        <li><code class="px-1.5 py-0.5 rounded bg-black/40 border border-white/10">docker compose up -d ollama</code></li>
-        <li><code class="px-1.5 py-0.5 rounded bg-black/40 border border-white/10">docker exec -it ollama ollama pull llama3.1</code></li>
-        <li><code class="px-1.5 py-0.5 rounded bg-black/40 border border-white/10">docker exec -it ollama ollama pull nomic-embed-text</code></li>
-        <li><code class="px-1.5 py-0.5 rounded bg-black/40 border border-white/10">npm i && npm run dev</code></li>
+        <li><code class="px-1.5 py-0.5 rounded bg-black/40 border border-white/10">docker compose up -d</code></li>
+        <li><code class="px-1.5 py-0.5 rounded bg-black/40 border border-white/10">docker compose logs -f model-pull</code> (모델 준비 대기)</li>
+        <li><code class="px-1.5 py-0.5 rounded bg-black/40 border border-white/10">docker compose run --rm ingest</code> (CSV 인제스트, 최초 1회)</li>
+        <li><code class="px-1.5 py-0.5 rounded bg-black/40 border border-white/10">http://localhost:8000</code> 접속</li>
       </ol>
       <div class="mt-4">
         <a href="/app.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold">
@@ -55,7 +55,7 @@
     </div>
 
     <p class="mt-10 text-xs text-slate-500 leading-relaxed">
-      ⚠️ 이 데모는 법률 자문이 아닙니다. 실제 적용 전 관할/최신성/사실관계 확인 및 전문가 자문이 필요합니다.
+      ⚠️ 이 데모는 투자 자문이 아닙니다. 실제 투자 결정 전 전문 투자 상담사 자문이 필요합니다.
     </p>
   </div>
 </body>

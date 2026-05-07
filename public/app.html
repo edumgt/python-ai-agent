@@ -3,443 +3,2046 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>App | Law RAG Agent</title>
+  <title>금융 AI Agent</title>
+  <link rel="icon" href="/favicon.ico" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <style>
-    .msg-bubble-user { background: linear-gradient(135deg,#6366f1,#4f46e5); }
-    .steps-panel { display: none; }
-    .steps-panel.open { display: block; }
-    .step-retrieve { border-left: 3px solid #6366f1; }
-    .step-final_answer { border-left: 3px solid #10b981; }
-    .step-clarify { border-left: 3px solid #f59e0b; }
+    /* ── Design Tokens (TradingView Light) ── */
+    :root {
+      --bg:        #f0f3fa;
+      --surf:      #ffffff;
+      --surf2:     #f5f6fa;
+      --surf3:     #ebedf3;
+      --border:    #e0e3eb;
+      --border2:   #c8ccd8;
+      --accent:    #2962ff;
+      --accent-h:  #1e4fd8;
+      --text:      #131722;
+      --text-dim:  #434651;
+      --text-mute: #787b86;
+      --green:     #089981;
+      --green-bg:  rgba(8,153,129,0.10);
+      --green-bd:  rgba(8,153,129,0.28);
+      --red:       #f23645;
+      --red-bg:    rgba(242,54,69,0.10);
+      --red-bd:    rgba(242,54,69,0.28);
+    }
+
+    /* ── Reset / Base ── */
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.55; font-family: -apple-system, 'Trebuchet MS', sans-serif; }
+
+    /* ── GNB ── */
+    .gnb-item {
+      height: 46px;
+      padding: 0 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      border: none;
+      border-bottom: 2px solid transparent;
+      background: none;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    .gnb-item:hover { color: var(--text); background: var(--surf2); }
+    .gnb-item.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+    /* ── LNB (right sidebar) ── */
+    .lnb-section-title {
+      padding: 14px 14px 6px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-mute);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+    }
+    .lnb-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 12px;
+      border-radius: 6px 0 0 6px;
+      margin-left: 6px;
+      font-size: 12.5px;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-right: 2px solid transparent;
+      transition: background .12s, color .12s, border-color .12s;
+    }
+    .lnb-item:hover { background: var(--surf2); color: var(--text); }
+    .lnb-item.active {
+      background: rgba(41,98,255,0.08);
+      color: var(--accent);
+      font-weight: 600;
+      border-right-color: var(--accent);
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    /* ── Form Controls ── */
+    .input {
+      width: 100%;
+      padding: 7px 11px;
+      border-radius: 6px;
+      background: var(--surf);
+      border: 1px solid var(--border);
+      color: var(--text) !important;
+      font-size: 13px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+      appearance: none;
+    }
+    .input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(41,98,255,0.15); }
+    input, textarea, select { color: var(--text) !important; background: var(--surf); }
+    input::placeholder, textarea::placeholder { color: var(--text-mute) !important; }
+    select option { background: var(--surf); color: var(--text); }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      padding: 7px 16px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: background .15s;
+      white-space: nowrap;
+    }
+    .btn-primary:hover { background: var(--accent-h); }
+
+    .btn-secondary {
+      padding: 7px 14px;
+      border-radius: 6px;
+      background: var(--surf);
+      color: var(--text-dim);
+      font-size: 13px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      white-space: nowrap;
+    }
+    .btn-secondary:hover { background: var(--surf2); color: var(--text); }
+
+    .btn-green {
+      padding: 7px 16px;
+      border-radius: 6px;
+      background: var(--green);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: opacity .15s;
+      white-space: nowrap;
+    }
+    .btn-green:hover { opacity: .88; }
+
+    .btn-red {
+      padding: 7px 16px;
+      border-radius: 6px;
+      background: var(--red);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: opacity .15s;
+      white-space: nowrap;
+    }
+    .btn-red:hover { opacity: .88; }
+
+    /* ── Badges ── */
+    .badge-buy  { display:inline-block; padding:2px 7px; border-radius:3px; font-size:11px; font-weight:700; background:var(--green-bg); color:var(--green); }
+    .badge-sell { display:inline-block; padding:2px 7px; border-radius:3px; font-size:11px; font-weight:700; background:var(--red-bg);   color:var(--red); }
+    .badge-hold { display:inline-block; padding:2px 7px; border-radius:3px; font-size:11px; font-weight:700; background:var(--surf3);    color:var(--text-mute); }
+
+    /* ── Misc ── */
+    .view { display: none; }
+    .view.active { display: block; }
+    pre { white-space: pre-wrap; word-break: break-word; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    #chart-container, #quant-chart-container, #us-chart-container { width: 100%; height: 420px; }
+    .step-retrieve     { border-left: 3px solid #2962ff; padding-left: 10px; }
+    .step-final_answer { border-left: 3px solid #089981; padding-left: 10px; }
+    .step-clarify      { border-left: 3px solid #f59e0b; padding-left: 10px; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--surf2); }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; }
+    th { color: var(--text-mute); font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+    td { padding: 9px 8px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text); }
+    tr:hover td { background: var(--surf2); }
+
+    /* ── Sub-panel (inner card bg) ── */
+    .panel { background: var(--surf2); border: 1px solid var(--border); border-radius: 6px; padding: 14px; }
   </style>
 </head>
-<body class="min-h-screen bg-slate-950 text-slate-100">
-  <!-- Top Bar -->
-  <div class="sticky top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <button id="menuBtn" class="md:hidden px-3 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10">
-          ☰
-        </button>
-        <div class="font-semibold tracking-tight">Law RAG Agent</div>
-        <div class="text-xs text-slate-400 hidden sm:block">Agentic AI · 법령/판례 ReAct 에이전트</div>
+<body class="min-h-screen flex flex-col">
+
+<!-- ══ GNB (Global Navigation Bar) ══════════════════════════════════ -->
+<header class="sticky top-0 z-50" style="background:var(--surf); border-bottom:1px solid var(--border); box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+  <div class="max-w-[1800px] mx-auto px-4 flex items-center" style="height:46px; gap:0;">
+    <!-- 로고 -->
+    <a href="/" class="flex items-center gap-2 font-bold shrink-0" style="color:var(--accent); font-size:15px; text-decoration:none; padding:0 20px 0 4px; border-right:1px solid var(--border); height:46px;">
+      <i class="fa-solid fa-chart-mixed"></i> 금융 AI Agent
+    </a>
+    <!-- GNB 메뉴 -->
+    <nav class="hidden md:flex items-center flex-1" style="height:46px; padding-left:4px;">
+      <button class="gnb-item" data-gnb="agent"><i class="fa-solid fa-robot fa-sm"></i> 금융정보 Agent</button>
+      <button class="gnb-item" data-gnb="crawl"><i class="fa-solid fa-spider fa-sm"></i> 크롤링</button>
+      <button class="gnb-item" data-gnb="trading"><i class="fa-solid fa-chart-line fa-sm"></i> 직접매매</button>
+      <button class="gnb-item" data-gnb="quant"><i class="fa-solid fa-bolt fa-sm"></i> 퀀트자동매매</button>
+      <button class="gnb-item" data-gnb="us"><i class="fa-solid fa-flag-usa fa-sm"></i> 미국주식</button>
+      <button class="gnb-item" data-gnb="company"><i class="fa-solid fa-building fa-sm"></i> 기업분석</button>
+      <button class="gnb-item" data-gnb="sysadmin"><i class="fa-solid fa-gear fa-sm"></i> 시스템관리</button>
+    </nav>
+    <!-- 우측: 시세 + 사용자 -->
+    <div class="hidden md:flex items-center shrink-0" style="gap:16px; padding-left:12px; border-left:1px solid var(--border); height:46px;">
+      <div id="market-ticker" style="display:flex; gap:20px; font-size:11.5px; color:var(--text-mute);"></div>
+      <div class="flex items-center gap-2" style="font-size:12px; color:var(--text-dim);">
+        <i class="fa-solid fa-circle-user" style="color:var(--accent);"></i>
+        <span id="user-name"></span>
       </div>
-      <div class="flex items-center gap-2">
-        <div id="userPill" class="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm">
-          <span class="text-slate-300">로그인됨:</span>
-          <span class="font-semibold" id="userName"></span>
+      <button id="logout-btn" class="btn-secondary" style="padding:5px 12px; font-size:12px;">로그아웃</button>
+    </div>
+    <!-- 햄버거 (모바일) -->
+    <button id="hamburger-btn" class="md:hidden ml-auto p-2" style="color:var(--text-dim);" aria-label="메뉴">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+  </div>
+  <!-- 모바일 드롭다운 -->
+  <div id="mobile-menu" class="hidden md:hidden px-4 pb-3" style="border-top:1px solid var(--border); background:var(--surf);">
+    <nav class="flex flex-col pt-2">
+      <button class="gnb-item text-left" data-gnb="agent"><i class="fa-solid fa-robot fa-sm"></i> 금융정보 Agent</button>
+      <button class="gnb-item text-left" data-gnb="crawl"><i class="fa-solid fa-spider fa-sm"></i> 크롤링</button>
+      <button class="gnb-item text-left" data-gnb="trading"><i class="fa-solid fa-chart-line fa-sm"></i> 직접매매</button>
+      <button class="gnb-item text-left" data-gnb="quant"><i class="fa-solid fa-bolt fa-sm"></i> 퀀트자동매매</button>
+      <button class="gnb-item text-left" data-gnb="us"><i class="fa-solid fa-flag-usa fa-sm"></i> 미국주식</button>
+      <button class="gnb-item text-left" data-gnb="company"><i class="fa-solid fa-building fa-sm"></i> 기업분석</button>
+      <button class="gnb-item text-left" data-gnb="sysadmin"><i class="fa-solid fa-gear fa-sm"></i> 시스템관리</button>
+    </nav>
+  </div>
+</header>
+
+<!-- Toast는 common.js setToast()가 동적으로 생성 (#_toast_el) -->
+
+<!-- ══ Main Layout ════════════════════════════════════════════════== -->
+<div class="flex flex-1 max-w-[1800px] mx-auto w-full" style="gap:0;">
+
+  <!-- Content -->
+  <main class="flex-1 min-w-0" style="padding:18px 20px; background:var(--bg);">
+    <div class="space-y-4">
+
+    <!-- ══ 1. 금융정보 Agent ════════════════════════════════════════ -->
+    <!-- 1-1. AI 채팅 -->
+    <div class="view" data-view="agent-chat">
+      <div class="card flex flex-col" style="height:calc(100vh - 140px)">
+        <div class="flex items-center justify-between pb-4 border-b border-white/10">
+          <div>
+            <h2 class="text-lg font-semibold">🤖 AI 금융 채팅</h2>
+            <p class="text-xs text-slate-400 mt-0.5">CB분석 · 금융상품 · 퀀트 정보를 ReAct 에이전트가 분석합니다</p>
+          </div>
+          <button id="clear-chat" class="btn-secondary text-xs">초기화</button>
         </div>
-        <button id="logoutBtn" class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm">로그아웃</button>
+        <div id="chat-messages" class="flex-1 overflow-y-auto py-4 space-y-4 pr-1"></div>
+        <div class="pt-4 border-t border-white/10">
+          <div class="flex gap-2 items-end">
+            <textarea id="chat-input" rows="2" class="input flex-1 resize-none"
+              placeholder="예) 2022년 30대 남성 평균 신용점수는? 금리 3% 이상 정기예금 추천해줘. 삼성전자 퀀트 시그널은?"></textarea>
+            <button id="chat-send" class="btn-primary px-5 py-3 whitespace-nowrap">전송</button>
+          </div>
+          <div class="mt-1 text-xs text-slate-500">Enter 전송 · Shift+Enter 줄바꿈</div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="max-w-6xl mx-auto px-4 py-6 flex gap-6">
-    <!-- Sidebar (Desktop) -->
-    <aside class="hidden md:block w-64 shrink-0">
-      <div class="rounded-2xl border border-white/10 bg-white/5 p-3">
-        <nav class="space-y-1">
-          <a data-route="chat" class="nav-item block px-3 py-2 rounded-xl hover:bg-white/10 border border-transparent">Chat</a>
-          <a data-route="ingest" class="nav-item block px-3 py-2 rounded-xl hover:bg-white/10 border border-transparent">Ingest</a>
-          <a data-route="library" class="nav-item block px-3 py-2 rounded-xl hover:bg-white/10 border border-transparent">Library</a>
-          <a data-route="settings" class="nav-item block px-3 py-2 rounded-xl hover:bg-white/10 border border-transparent">Settings</a>
-        </nav>
-      </div>
-      <div class="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-slate-400 leading-relaxed">
-        에이전트가 질문을 분석하고 여러 차례 검색 후 근거 기반 답변을 생성합니다. 답변은 법률 자문이 아닌 정보 제공 목적입니다.
-      </div>
-    </aside>
-
-    <!-- Offcanvas (Mobile) -->
-    <div id="overlay" class="fixed inset-0 bg-black/60 hidden z-40 md:hidden"></div>
-    <aside id="offcanvas" class="fixed top-0 left-0 h-full w-72 bg-slate-950 border-r border-white/10 translate-x-[-100%] transition-transform z-50 md:hidden">
-      <div class="p-4 border-b border-white/10 flex items-center justify-between">
-        <div class="font-semibold">메뉴</div>
-        <button id="closeBtn" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10">닫기</button>
-      </div>
-      <div class="p-3">
-        <nav class="space-y-1">
-          <a data-route="chat" class="nav-item block px-3 py-2 rounded-xl hover:bg-white/10 border border-transparent">Chat</a>
-          <a data-route="ingest" class="nav-item block px-3 py-2 rounded-xl hover:bg-white/10 border border-transparent">Ingest</a>
-          <a data-route="library" class="nav-item block px-3 py-2 rounded-xl hover:bg-white/10 border border-transparent">Library</a>
-          <a data-route="settings" class="nav-item block px-3 py-2 rounded-xl hover:bg-white/10 border border-transparent">Settings</a>
-        </nav>
-      </div>
-    </aside>
-
-    <!-- Main -->
-    <main class="flex-1 min-w-0">
-      <div data-toast class="hidden mb-4 px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-sm"></div>
-
-      <!-- Chat -->
-      <section id="view-chat" class="view hidden">
-        <div class="rounded-2xl border border-white/10 bg-white/5 p-5 flex flex-col" style="height:calc(100vh - 140px)">
-          <div class="flex items-center justify-between gap-4 pb-4 border-b border-white/10">
-            <div>
-              <h2 class="text-xl font-semibold">Chat</h2>
-              <p class="mt-0.5 text-xs text-slate-400">ReAct 에이전트: 단계적 검색 → 근거 인용 답변</p>
+    <!-- 1-2. CB 분석 -->
+    <div class="view" data-view="agent-cb">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-4">📊 CB 신용 분석</h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <!-- 개인 CB -->
+          <div class="rounded-xl border border-white/10 bg-black/20 p-4">
+            <h3 class="font-semibold text-indigo-300 mb-3">개인 신용(CB)</h3>
+            <div class="space-y-2">
+              <select id="pcb-period" class="input">
+                <option value="">전체 기간</option>
+                <option value="202212">2022년 12월</option>
+                <option value="202112">2021년 12월</option>
+                <option value="202012">2020년 12월</option>
+                <option value="201912">2019년 12월</option>
+              </select>
+              <select id="pcb-gender" class="input">
+                <option value="">전체 성별</option>
+                <option value="1">남성</option>
+                <option value="2">여성</option>
+              </select>
+              <select id="pcb-age" class="input">
+                <option value="">전체 연령대</option>
+                <option value="1">10대 이하</option>
+                <option value="2">20대</option>
+                <option value="3">30대</option>
+                <option value="4">40대</option>
+                <option value="5">50대</option>
+                <option value="6">60대 이상</option>
+              </select>
+              <button id="pcb-search" class="btn-primary w-full">조회</button>
             </div>
-            <button id="clearChatBtn" class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-400">대화 초기화</button>
+            <pre id="pcb-result" class="mt-4 text-xs text-slate-300 bg-black/30 rounded-xl p-3 min-h-[100px]"></pre>
           </div>
-
-          <!-- Message list -->
-          <div id="chatMessages" class="flex-1 overflow-y-auto py-4 space-y-4 pr-1"></div>
-
-          <!-- Input area -->
-          <div class="pt-4 border-t border-white/10">
-            <div class="flex gap-2 items-end">
-              <textarea id="q" rows="2"
-                class="flex-1 px-4 py-3 rounded-xl bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-sm"
-                placeholder="예) 임금체불이 발생했을 때, 근로자가 취할 수 있는 대응 절차와 입증자료 체크리스트를 알려줘."></textarea>
-              <button id="askBtn" class="px-5 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-semibold text-sm whitespace-nowrap">전송</button>
+          <!-- 기업 CB -->
+          <div class="rounded-xl border border-white/10 bg-black/20 p-4">
+            <h3 class="font-semibold text-purple-300 mb-3">기업 신용(CB)</h3>
+            <div class="space-y-2">
+              <select id="ccb-period" class="input">
+                <option value="">전체 기간</option>
+                <option value="2022">2022년</option>
+                <option value="2021">2021년</option>
+              </select>
+              <select id="ccb-size" class="input">
+                <option value="">전체 규모</option>
+                <option value="1">대기업</option>
+                <option value="2">중견기업</option>
+                <option value="3">중소기업</option>
+              </select>
+              <input id="ccb-industry" class="input" placeholder="업종코드 (예: C=제조업, J=IT)" />
+              <button id="ccb-search" class="btn-primary w-full">조회</button>
             </div>
-            <div class="mt-1.5 text-xs text-slate-500">Enter로 전송 · Shift+Enter로 줄바꿈</div>
+            <pre id="ccb-result" class="mt-4 text-xs text-slate-300 bg-black/30 rounded-xl p-3 min-h-[100px]"></pre>
           </div>
         </div>
-      </section>
+      </div>
+    </div>
 
-      <!-- Ingest -->
-      <section id="view-ingest" class="view hidden">
-        <div class="rounded-2xl border border-white/10 bg-white/5 p-5">
-          <h2 class="text-xl font-semibold">Ingest</h2>
-          <p class="mt-1 text-sm text-slate-300">데모 법령/판례 문서를 chunk + embedding 후 SQLite에 저장합니다.</p>
-
-          <div class="mt-5 flex flex-wrap gap-2">
-            <button id="ingestBtn" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold">
-              데모 문서 인덱싱
-            </button>
-            <button id="resetBtn" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm">
-              DB 초기화
-            </button>
-          </div>
-
-          <pre id="ingestLog" class="mt-5 whitespace-pre-wrap text-xs leading-relaxed text-slate-200 bg-black/30 border border-white/10 rounded-xl p-4 min-h-[160px]"></pre>
+    <!-- 1-3. 금융상품 -->
+    <div class="view" data-view="agent-products">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-4">💰 금융상품 검색</h2>
+        <div class="flex gap-3 mb-4 flex-wrap">
+          <button class="product-tab btn-primary" data-tab="bank">은행 수신상품</button>
+          <button class="product-tab btn-secondary" data-tab="fund">공모펀드</button>
         </div>
-      </section>
-
-      <!-- Library -->
-      <section id="view-library" class="view hidden">
-        <div class="rounded-2xl border border-white/10 bg-white/5 p-5">
-          <h2 class="text-xl font-semibold">Library</h2>
-          <p class="mt-1 text-sm text-slate-300">인덱싱된 chunk를 검색합니다.</p>
-
-          <div class="mt-4 flex gap-2">
-            <input id="libQ" class="flex-1 px-4 py-2 rounded-xl bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="검색어 (예: 임금체불, 계약해제, 해고)" />
-            <button id="libBtn" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10">검색</button>
+        <div id="bank-search-form">
+          <div class="flex gap-2 flex-wrap">
+            <input id="bank-rate" class="input w-32" type="number" step="0.1" placeholder="최소금리 %" />
+            <input id="bank-keyword" class="input flex-1" placeholder="키워드 (상품명, 은행명)" />
+            <button id="bank-search" class="btn-primary">검색</button>
           </div>
-
-          <div id="libRes" class="mt-5 space-y-3"></div>
         </div>
-      </section>
+        <div id="fund-search-form" class="hidden">
+          <div class="flex gap-2 flex-wrap">
+            <select id="fund-type" class="input w-36">
+              <option value="">전체 유형</option>
+              <option value="국내주식">국내주식</option>
+              <option value="해외주식">해외주식</option>
+              <option value="국내채권">국내채권</option>
+              <option value="국내혼합">국내혼합</option>
+            </select>
+            <input id="fund-return" class="input w-32" type="number" step="0.5" placeholder="최소 1년수익률 %" />
+            <input id="fund-keyword" class="input flex-1" placeholder="키워드 (펀드명, 운용사)" />
+            <button id="fund-search" class="btn-primary">검색</button>
+          </div>
+        </div>
+        <div id="product-results" class="mt-4 space-y-2 text-sm"></div>
+      </div>
+    </div>
 
-      <!-- Settings -->
-      <section id="view-settings" class="view hidden">
-        <div class="rounded-2xl border border-white/10 bg-white/5 p-5">
-          <h2 class="text-xl font-semibold">Settings</h2>
-          <p class="mt-1 text-sm text-slate-300">로그인 세션과 Client ID 정보를 확인합니다.</p>
+    <!-- 1-4. 뉴스/RAG 검색 -->
+    <div class="view" data-view="agent-news">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-4">📰 뉴스/공시 RAG 검색</h2>
+        <div class="flex gap-2 mb-4">
+          <input id="news-q" class="input flex-1" placeholder="검색어 (예: 금리, 퀀트, 삼성전자)" />
+          <button id="news-search" class="btn-primary">검색</button>
+        </div>
+        <div id="news-results" class="space-y-3 text-sm"></div>
+      </div>
+    </div>
 
-          <div class="mt-5 grid md:grid-cols-2 gap-4">
-            <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
-              <div class="text-xs text-slate-400">User</div>
-              <div class="mt-2 text-sm">
-                <div><span class="text-slate-400">이름:</span> <span id="sName" class="font-semibold"></span></div>
-                <div class="mt-1"><span class="text-slate-400">이메일:</span> <span id="sEmail"></span></div>
-              <div class="mt-1"><span class="text-slate-400">역할:</span> <span id="sRoles" class="font-mono"></span></div>
-</div>
-            </div>
-            <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
-              <div class="text-xs text-slate-400">Client / Session</div>
-              <div class="mt-2 text-sm">
-                <div><span class="text-slate-400">Client ID:</span> <span id="sClient" class="font-mono"></span></div>
-                <div class="mt-1"><span class="text-slate-400">Session:</span> <span class="font-mono">cookie-based</span></div>
+    <!-- ══ 2. 크롤링 ═══════════════════════════════════════════════ -->
+    <!-- 2-1. 자동 크롤링 -->
+    <div class="view" data-view="crawl-auto">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-2">🤖 자동 크롤링</h2>
+        <p class="text-sm text-slate-400 mb-4">
+          설정된 소스(GitHub python-quant docs 등)를 자동으로 크롤링하여 Qdrant RAG에 저장합니다.
+        </p>
+        <div class="mb-3 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-slate-300">
+          <div class="font-semibold text-indigo-300 mb-1">크롤링 대상</div>
+          <div>• <code class="text-xs bg-black/40 px-1 rounded">github:edumgt/python-quant/docs</code> — 퀀트 전략 문서</div>
+        </div>
+        <button id="auto-crawl-btn" class="btn-primary">자동 크롤링 실행</button>
+        <pre id="crawl-log" class="mt-4 text-xs text-slate-300 bg-black/30 rounded-xl p-4 min-h-[120px]"></pre>
+      </div>
+    </div>
+
+    <!-- 2-2. 수동 크롤링 -->
+    <div class="view" data-view="crawl-manual">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-4">🔗 수동 URL 크롤링</h2>
+        <div class="flex gap-2 mb-4">
+          <input id="crawl-url" class="input flex-1" placeholder="https://..." />
+          <button id="manual-crawl-btn" class="btn-primary whitespace-nowrap">크롤링</button>
+        </div>
+        <div class="text-xs text-slate-500 mb-4">
+          금융 포털, 증권사 리포트, 공시 페이지 URL을 입력하면 텍스트를 추출하여 RAG에 저장합니다.
+        </div>
+        <pre id="manual-crawl-log" class="text-xs text-slate-300 bg-black/30 rounded-xl p-4 min-h-[100px]"></pre>
+        <h3 class="font-semibold mt-5 mb-2">크롤링 현황</h3>
+        <div id="crawl-list" class="space-y-2 text-sm"></div>
+      </div>
+    </div>
+
+    <!-- 2-3. 데이터 인제스트 -->
+    <div class="view" data-view="crawl-ingest">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-2">📂 금융 데이터 인제스트</h2>
+        <p class="text-sm text-slate-400 mb-4">
+          개인CB / 기업CB / 금융상품 CSV 파일을 SQLite에 집계하여 저장합니다. (최초 1회 또는 데이터 갱신 시)
+        </p>
+        <div class="flex gap-3">
+          <button id="ingest-btn" class="btn-primary">데이터 인제스트 실행</button>
+          <button id="admin-reset-btn" class="btn-red">DB 초기화</button>
+        </div>
+        <pre id="ingest-log" class="mt-4 text-xs text-slate-300 bg-black/30 rounded-xl p-4 min-h-[160px]"></pre>
+      </div>
+    </div>
+
+    <!-- ══ 3. 직접 주식 매매 ════════════════════════════════════== -->
+    <!-- 3-1. 주가 차트 -->
+    <div class="view" data-view="trading-chart">
+      <div class="card">
+        <div class="flex items-center gap-3 mb-4 flex-wrap">
+          <h2 class="text-lg font-semibold">📊 주가 차트</h2>
+          <input id="chart-symbol" class="input w-36" value="005930.KS" placeholder="종목코드.KS" />
+          <select id="chart-period" class="input w-28">
+            <option value="1mo">1개월</option>
+            <option value="3mo">3개월</option>
+            <option value="6mo">6개월</option>
+            <option value="1y" selected>1년</option>
+            <option value="3y">3년</option>
+            <option value="10y">10년</option>
+          </select>
+          <button id="chart-load" class="btn-primary">조회</button>
+        </div>
+        <div id="stock-info" class="mb-3 text-sm text-slate-300"></div>
+        <div id="chart-container"></div>
+      </div>
+    </div>
+
+    <!-- 3-2. 포트폴리오 -->
+    <div class="view" data-view="trading-portfolio">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-4">💼 내 포트폴리오</h2>
+        <!-- 보유 종목 추가 -->
+        <div class="rounded-xl border border-white/10 bg-black/20 p-4 mb-4">
+          <h3 class="text-sm font-semibold text-slate-300 mb-3">종목 추가/수정</h3>
+          <div class="flex gap-2 flex-wrap">
+            <input id="pf-symbol" class="input w-32" placeholder="005930.KS" />
+            <input id="pf-name" class="input w-32" placeholder="삼성전자" />
+            <input id="pf-qty" class="input w-24" type="number" placeholder="수량" />
+            <input id="pf-price" class="input w-28" type="number" placeholder="평균단가" />
+            <button id="pf-add" class="btn-primary">추가</button>
+          </div>
+        </div>
+        <div id="portfolio-table" class="text-sm"></div>
+        <div id="portfolio-summary" class="mt-4 text-sm text-slate-400"></div>
+      </div>
+    </div>
+
+    <!-- 3-3. 주문 / 매매 -->
+    <div class="view" data-view="trading-order">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-4">🔄 주문 / 매매</h2>
+        <div class="grid md:grid-cols-2 gap-4 mb-4">
+          <div class="rounded-xl border border-white/10 bg-black/20 p-4">
+            <h3 class="font-semibold mb-3">주문 입력</h3>
+            <div class="space-y-2">
+              <input id="ord-symbol" class="input" placeholder="종목코드 (예: 005930.KS)" />
+              <input id="ord-name" class="input" placeholder="종목명 (예: 삼성전자)" />
+              <input id="ord-price" class="input" type="number" placeholder="주문가격 (원)" />
+              <input id="ord-qty" class="input" type="number" placeholder="수량" />
+              <select id="ord-broker" class="input">
+                <option value="virtual">가상 매매 (Mock)</option>
+                <option value="kiwoom">키움증권 (Mockup)</option>
+                <option value="toss">토스증권 (Mockup)</option>
+              </select>
+              <div class="flex gap-2">
+                <button id="ord-buy" class="btn-green flex-1">매수</button>
+                <button id="ord-sell" class="btn-red flex-1">매도</button>
               </div>
             </div>
           </div>
-
-          <div class="mt-6 rounded-2xl border border-white/10 bg-black/20 p-4 text-xs text-slate-400 leading-relaxed">
-            Agentic AI: ReAct 루프로 여러 번 검색 후 근거 기반 답변 생성. 실무 적용 시에는 (1) 문서 버전/기준일 메타데이터, (2) 관할, (3) 최신성 검증, (4) 감사 로그, (5) 권한(역할) 기반 문서 접근 통제를 추가하세요.
+          <!-- 키움/토스 API 연동 -->
+          <div class="rounded-xl border border-white/10 bg-black/20 p-4">
+            <h3 class="font-semibold mb-3">증권사 API 연동 (Mockup)</h3>
+            <div id="broker-status" class="space-y-2 text-sm text-slate-400 mb-3"></div>
+            <div class="space-y-2">
+              <input id="kiwoom-key" class="input" placeholder="키움증권 App Key" />
+              <input id="kiwoom-secret" class="input" type="password" placeholder="키움증권 Secret" />
+              <input id="toss-key" class="input" placeholder="토스증권 App Key" />
+              <input id="toss-secret" class="input" type="password" placeholder="토스증권 Secret" />
+              <button id="broker-save" class="btn-primary w-full">설정 저장</button>
+            </div>
+            <div class="mt-2 text-xs text-slate-500">* Mockup: 실제 API 연결 없이 시뮬레이션만 동작합니다.</div>
           </div>
         </div>
-      </section>
-    </main>
+        <h3 class="font-semibold mb-2 text-sm">최근 주문 내역</h3>
+        <div id="order-history" class="text-sm space-y-1"></div>
+      </div>
+    </div>
+
+    <!-- ══ 4. 퀀트 자동매매 ════════════════════════════════════════ -->
+    <!-- 4-1. 퀀트 대시보드 -->
+    <div class="view" data-view="quant-dashboard">
+      <div class="space-y-4">
+        <!-- 시장 요약 -->
+        <div class="card">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">⚡ 퀀트 대시보드</h2>
+            <button id="refresh-market" class="btn-secondary text-xs">새로고침</button>
+          </div>
+          <div id="market-cards" class="grid grid-cols-3 gap-3 text-sm"></div>
+        </div>
+        <!-- 5개 종목 시그널 -->
+        <div class="card">
+          <h3 class="font-semibold mb-3">AI 매매 시그널 (대표 5종목)</h3>
+          <div id="signal-cards" class="grid md:grid-cols-5 gap-2 text-xs"></div>
+        </div>
+        <!-- 퀀트 차트 -->
+        <div class="card">
+          <div class="flex gap-2 items-center mb-3">
+            <select id="quant-symbol" class="input w-44">
+              <option value="005930.KS">삼성전자</option>
+              <option value="000660.KS">SK하이닉스</option>
+              <option value="035420.KS">NAVER</option>
+              <option value="005380.KS">현대자동차</option>
+              <option value="051910.KS">LG화학</option>
+            </select>
+            <button id="quant-chart-load" class="btn-primary text-xs">차트 로드</button>
+          </div>
+          <div id="quant-chart-container"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4-2. 자동매매 현황 -->
+    <div class="view" data-view="quant-auto">
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-semibold">🤖 10분 자동매매 (Agentic AI)</h2>
+            <p class="text-xs text-slate-400 mt-1">AI가 10분마다 5개 종목을 분석하여 자동으로 가상 매매합니다.</p>
+          </div>
+          <div id="auto-trade-status" class="text-sm text-slate-400"></div>
+        </div>
+        <div class="flex gap-3 mb-4">
+          <button id="auto-start" class="btn-green">▶ 자동매매 시작</button>
+          <button id="auto-stop" class="btn-red">■ 중지</button>
+          <button id="auto-refresh" class="btn-secondary text-xs">로그 새로고침</button>
+        </div>
+        <div class="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3 mb-4 text-xs text-indigo-300">
+          전략: RSI 과매도/과매수 · 골든/데드크로스 · 볼린저밴드 → AI 종합 시그널 → 자동 가상 주문
+        </div>
+        <div id="auto-trade-log" class="space-y-2 text-xs max-h-[400px] overflow-y-auto"></div>
+      </div>
+    </div>
+
+    <!-- 4-3. 전략 분석 (10년 백테스트 Mockup) -->
+    <div class="view" data-view="quant-backtest">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-2">📉 퀀트 전략 분석 (10년 Mockup)</h2>
+        <p class="text-sm text-slate-400 mb-4">
+          대표 5종목의 근 10년 데이터 기반 퀀트 지표를 조회합니다.
+        </p>
+        <div class="flex gap-2 mb-4">
+          <select id="bt-symbol" class="input w-44">
+            <option value="005930.KS">삼성전자</option>
+            <option value="000660.KS">SK하이닉스</option>
+            <option value="035420.KS">NAVER</option>
+            <option value="005380.KS">현대자동차</option>
+            <option value="051910.KS">LG화학</option>
+          </select>
+          <button id="bt-load" class="btn-primary">분석</button>
+        </div>
+        <div id="bt-result" class="text-sm space-y-3"></div>
+      </div>
+    </div>
+
+    <!-- 4-4. 설정 (증권사 API) -->
+    <div class="view" data-view="settings">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-4">⚙️ 증권사 Open API 연결</h2>
+        <p class="text-xs text-slate-400 mb-4">
+          실제 API 키를 입력하면 실시간 시세·계좌·주문을 사용합니다. 비워두면 Mockup 데이터로 동작합니다.
+        </p>
+        <div class="space-y-4">
+          <div>
+            <label class="text-sm text-slate-400 block mb-1">증권사 선택</label>
+            <select id="broker-type" class="input w-52">
+              <option value="mock">Mockup (테스트)</option>
+              <option value="kis">한국투자증권 (KIS)</option>
+              <option value="ebest">LS증권 (eBest)</option>
+            </select>
+          </div>
+          <div class="grid md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-slate-400">App Key</label>
+              <input id="broker-app-key" type="text" class="input mt-1" placeholder="API App Key" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">App Secret</label>
+              <input id="broker-app-secret" type="password" class="input mt-1" placeholder="API Secret" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">계좌번호</label>
+              <input id="broker-account" type="text" class="input mt-1" placeholder="예) 5012345601" />
+            </div>
+            <div class="flex items-end pb-1">
+              <label class="flex items-center gap-2 text-sm cursor-pointer">
+                <input id="broker-paper" type="checkbox" checked class="w-4 h-4 rounded" />
+                <span class="text-slate-300">모의투자 (Paper Trading)</span>
+              </label>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button id="broker-save" class="btn-primary">저장 / 연결</button>
+            <button id="broker-test" class="btn-secondary">연결 테스트</button>
+          </div>
+          <div id="broker-status" class="text-sm text-slate-400"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 5. 미국주식 (Alpaca Mockup) ══════════════════════════════════ -->
+    <!-- 5-1. 미국주식 대시보드 -->
+    <div class="view" data-view="us-dashboard">
+      <div class="space-y-4">
+        <div class="card">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="text-lg font-semibold">🇺🇸 미국주식 대시보드</h2>
+              <p class="text-xs mt-0.5" style="color:var(--text-dim);">Alpaca Markets API (Mockup) · 실시간 시세 · 포트폴리오</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs px-2 py-1 rounded-full" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);">● MOCKUP</span>
+              <button id="us-refresh" class="btn-secondary text-xs">새로고침</button>
+            </div>
+          </div>
+          <div id="us-market-cards" class="grid grid-cols-4 gap-3 text-sm"></div>
+        </div>
+        <div class="card">
+          <h3 class="font-semibold mb-3">AI 시그널 (Big Tech 8)</h3>
+          <div id="us-signal-cards" class="grid grid-cols-4 gap-3 text-xs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5-2. 미국주식 주가 차트 -->
+    <div class="view" data-view="us-chart">
+      <div class="card">
+        <div class="flex items-center gap-3 mb-4 flex-wrap">
+          <h2 class="text-lg font-semibold">📊 미국주식 차트</h2>
+          <input id="us-symbol" class="input w-28" value="AAPL" placeholder="AAPL, TSLA..." />
+          <select id="us-period" class="input w-28">
+            <option value="1mo">1개월</option>
+            <option value="3mo">3개월</option>
+            <option value="6mo">6개월</option>
+            <option value="1y" selected>1년</option>
+            <option value="3y">3년</option>
+          </select>
+          <button id="us-chart-load" class="btn-primary">조회</button>
+        </div>
+        <div id="us-stock-info" class="mb-3 text-sm" style="color:var(--text-dim);"></div>
+        <div id="us-chart-container" style="width:100%;height:400px;"></div>
+      </div>
+    </div>
+
+    <!-- 5-3. 미국주식 주문 -->
+    <div class="view" data-view="us-order">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-4">🔄 미국주식 주문 (Alpaca Mockup)</h2>
+        <div class="grid md:grid-cols-2 gap-4 mb-4">
+          <div class="rounded-xl p-4" style="background:var(--surf2);border:1px solid var(--border);">
+            <h3 class="font-semibold mb-3 text-sm">주문 입력</h3>
+            <div class="space-y-2">
+              <input id="us-ord-symbol" class="input" placeholder="종목코드 (예: AAPL, TSLA)" />
+              <input id="us-ord-qty" class="input" type="number" placeholder="수량 (주)" />
+              <select id="us-ord-type" class="input">
+                <option value="market">시장가</option>
+                <option value="limit">지정가</option>
+              </select>
+              <input id="us-ord-price" class="input" type="number" step="0.01" placeholder="지정가 (USD, 시장가 불필요)" />
+              <div class="flex gap-2">
+                <button id="us-ord-buy" class="btn-green flex-1">매수 (Buy)</button>
+                <button id="us-ord-sell" class="btn-red flex-1">매도 (Sell)</button>
+              </div>
+            </div>
+          </div>
+          <div class="rounded-xl p-4" style="background:var(--surf2);border:1px solid var(--border);">
+            <h3 class="font-semibold mb-3 text-sm">Alpaca API 설정</h3>
+            <div class="space-y-2">
+              <div class="text-xs px-3 py-2 rounded-lg" style="background:rgba(67,97,238,0.12);color:#a5b4fc;border:1px solid rgba(67,97,238,0.3);">
+                Alpaca Markets Paper Trading (모의투자) 모드로 동작합니다.
+              </div>
+              <input id="alpaca-key" class="input" placeholder="Alpaca API Key ID" />
+              <input id="alpaca-secret" class="input" type="password" placeholder="Alpaca Secret Key" />
+              <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text-dim);">
+                <input id="alpaca-paper" type="checkbox" checked class="w-4 h-4" />
+                <span>Paper Trading (모의투자)</span>
+              </label>
+              <button id="alpaca-save" class="btn-primary w-full">저장 / 연결</button>
+            </div>
+            <div id="alpaca-status" class="mt-2 text-xs" style="color:var(--text-dim);"></div>
+          </div>
+        </div>
+        <h3 class="font-semibold mb-2 text-sm">최근 주문 내역</h3>
+        <div id="us-order-history" class="space-y-1 text-sm"></div>
+      </div>
+    </div>
+
+    <!-- 5-4. 미국주식 포트폴리오 -->
+    <div class="view" data-view="us-portfolio">
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">💼 미국주식 포트폴리오</h2>
+          <button id="us-pf-refresh" class="btn-secondary text-xs">새로고침</button>
+        </div>
+        <div id="us-account-summary" class="grid grid-cols-3 gap-3 mb-4 text-sm"></div>
+        <div id="us-portfolio-table" class="text-sm"></div>
+      </div>
+    </div>
+
+    <!-- ══ 7. 기업분석 ════════════════════════════════════════════════ -->
+    <!-- 7-1. 기업 선택 대시보드 -->
+    <div class="view" data-view="company-dashboard">
+      <div class="space-y-4">
+        <!-- 기업 선택 탭 -->
+        <div class="card" style="padding:14px 18px;">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="text-sm font-semibold" style="color:var(--text-dim);">기업 선택</span>
+            <div id="company-tabs" class="flex gap-2 flex-wrap"></div>
+          </div>
+        </div>
+        <!-- 기업 개요 카드 -->
+        <div id="co-overview" class="grid grid-cols-4 gap-3"></div>
+        <!-- 핵심 지표 + 재무 요약 -->
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="card">
+            <h3 class="font-semibold mb-3 text-sm">밸류에이션 지표</h3>
+            <div id="co-valuation" class="space-y-2"></div>
+          </div>
+          <div class="card">
+            <h3 class="font-semibold mb-3 text-sm">수익성 지표</h3>
+            <div id="co-profitability" class="space-y-2"></div>
+          </div>
+        </div>
+        <!-- 분기 실적 -->
+        <div class="card">
+          <h3 class="font-semibold mb-3 text-sm">분기별 실적 추이</h3>
+          <div id="co-quarterly" class="overflow-x-auto"></div>
+        </div>
+        <!-- 재무상태표 요약 -->
+        <div class="card">
+          <h3 class="font-semibold mb-3 text-sm">재무상태표 요약 (최근 연도)</h3>
+          <div id="co-balance" class="overflow-x-auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7-2. 기업 비교 -->
+    <div class="view" data-view="company-compare">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-4">5개 기업 비교 분석</h2>
+        <div id="co-compare-table" class="overflow-x-auto"></div>
+      </div>
+    </div>
+
+    <!-- 7-3. 산업/섹터 -->
+    <div class="view" data-view="company-sector">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-4">섹터별 밸류에이션</h2>
+        <div id="co-sector-cards" class="grid md:grid-cols-3 gap-4"></div>
+      </div>
+    </div>
+
+    <!-- ══ 6. 시스템 관리 ═════════════════════════════════════════════ -->
+    <!-- 5-1. 서버 대시보드 -->
+    <div class="view" data-view="sysadmin-dashboard">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold">⚙️ 시스템 대시보드</h2>
+        <button id="sys-refresh" class="btn-secondary text-xs">새로고침</button>
+      </div>
+      <div id="sys-host" class="grid grid-cols-3 gap-3 mb-4"></div>
+      <h3 class="text-sm font-semibold text-slate-300 mb-2">서비스 상태</h3>
+      <div id="sys-services" class="grid md:grid-cols-3 gap-3 mb-4"></div>
+      <h3 class="text-sm font-semibold text-slate-300 mb-2">Docker 컨테이너</h3>
+      <div id="sys-containers" class="space-y-2"></div>
+    </div>
+
+    <!-- 5-2. 로그 / 이벤트 -->
+    <div class="view" data-view="sysadmin-logs">
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-3">📋 감사 로그</h2>
+        <div id="audit-log" class="text-xs font-mono space-y-1 text-slate-400 max-h-[600px] overflow-y-auto"></div>
+      </div>
+    </div>
+
+    </div>
+  </main>
+
+  <!-- LNB (Right sidebar) -->
+  <aside id="lnb" class="shrink-0 hidden md:flex flex-col" style="width:200px; background:var(--surf); border-left:1px solid var(--border); min-height:calc(100vh - 46px);">
+    <div class="sticky" style="top:46px;">
+      <div id="lnb-section-title" class="lnb-section-title"></div>
+      <nav id="lnb-nav" style="padding:4px 0 12px; display:flex; flex-direction:column; gap:1px;">
+        <!-- Populated by JS -->
+      </nav>
+    </div>
+  </aside>
+</div>
+
+<!-- ══ Footer ═══════════════════════════════════════════════════════ -->
+<footer style="background:var(--surf); border-top:1px solid var(--border); padding:11px 0;">
+  <div class="max-w-[1800px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-2" style="font-size:11.5px; color:var(--text-mute);">
+    <div class="flex items-center gap-2">
+      <span style="color:var(--accent); font-weight:600;"><i class="fa-solid fa-chart-mixed"></i> 금융 AI Agent</span>
+      <span style="color:var(--border2);">|</span>
+      <span>Python / FastAPI · Ollama · Qdrant · Redis · MongoDB</span>
+    </div>
+    <div>&copy; <span id="footer-year"></span> <strong style="color:var(--text-dim);">(주)에듀엠지티</strong>. All rights reserved.</div>
+    <div><i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b;"></i> 투자 자문이 아닌 정보 제공 목적입니다.</div>
   </div>
+</footer>
 
-  <script type="module">
-    import { api, getMe, setToast } from "/js/common.js";
+<script type="module">
+import { api, getMe, setToast, escHtml, fmt, fmtPct, colorPct } from "/js/common.js";
 
-    const menuBtn = document.getElementById("menuBtn");
-    const closeBtn = document.getElementById("closeBtn");
-    const overlay = document.getElementById("overlay");
-    const offcanvas = document.getElementById("offcanvas");
+// ── Navigation ────────────────────────────────────────────────────
+const GNB_MENUS = {
+  agent: {
+    label: "<i class='fa-solid fa-robot'></i> 금융정보 Agent",
+    items: [
+      { key: "agent-chat",     icon: "fa-solid fa-comments",        label: "AI 채팅" },
+      { key: "agent-cb",       icon: "fa-solid fa-chart-bar",       label: "CB 분석" },
+      { key: "agent-products", icon: "fa-solid fa-coins",           label: "금융상품" },
+      { key: "agent-news",     icon: "fa-solid fa-newspaper",       label: "뉴스/RAG" },
+    ],
+  },
+  crawl: {
+    label: "<i class='fa-solid fa-spider'></i> 크롤링",
+    items: [
+      { key: "crawl-auto",    icon: "fa-solid fa-rotate",          label: "자동 크롤링" },
+      { key: "crawl-manual",  icon: "fa-solid fa-link",            label: "수동 크롤링" },
+      { key: "crawl-ingest",  icon: "fa-solid fa-database",        label: "데이터 인제스트" },
+    ],
+  },
+  trading: {
+    label: "<i class='fa-solid fa-chart-line'></i> 직접매매",
+    items: [
+      { key: "trading-chart",     icon: "fa-solid fa-chart-candlestick", label: "주가 차트" },
+      { key: "trading-portfolio", icon: "fa-solid fa-briefcase",         label: "포트폴리오" },
+      { key: "trading-order",     icon: "fa-solid fa-arrows-rotate",     label: "주문/매매" },
+    ],
+  },
+  quant: {
+    label: "<i class='fa-solid fa-bolt'></i> 퀀트자동매매",
+    items: [
+      { key: "quant-dashboard", icon: "fa-solid fa-gauge-high",      label: "퀀트 대시보드" },
+      { key: "quant-auto",      icon: "fa-solid fa-robot",           label: "자동매매 현황" },
+      { key: "quant-backtest",  icon: "fa-solid fa-flask",           label: "전략 분석" },
+      { key: "settings",        icon: "fa-solid fa-sliders",         label: "증권사 API 설정" },
+    ],
+  },
+  us: {
+    label: "<i class='fa-solid fa-flag-usa'></i> 미국주식",
+    items: [
+      { key: "us-dashboard",  icon: "fa-solid fa-gauge",            label: "대시보드" },
+      { key: "us-chart",      icon: "fa-solid fa-chart-area",       label: "주가 차트" },
+      { key: "us-order",      icon: "fa-solid fa-arrow-right-arrow-left", label: "주문/매매" },
+      { key: "us-portfolio",  icon: "fa-solid fa-wallet",           label: "포트폴리오" },
+    ],
+  },
+  company: {
+    label: "<i class='fa-solid fa-building'></i> 기업분석",
+    items: [
+      { key: "company-dashboard", icon: "fa-solid fa-gauge",          label: "기업 대시보드" },
+      { key: "company-compare",   icon: "fa-solid fa-table-columns",  label: "기업 비교" },
+      { key: "company-sector",    icon: "fa-solid fa-layer-group",    label: "섹터 분석" },
+    ],
+  },
+  sysadmin: {
+    label: "<i class='fa-solid fa-gear'></i> 시스템관리",
+    items: [
+      { key: "sysadmin-dashboard", icon: "fa-solid fa-server",      label: "서버 대시보드" },
+      { key: "sysadmin-logs",      icon: "fa-solid fa-scroll",      label: "감사 로그" },
+    ],
+  },
+};
 
-    function openCanvas() {
-      overlay.classList.remove("hidden");
-      offcanvas.style.transform = "translateX(0)";
+let currentGnb = "agent";
+let currentView = "agent-chat";
+let chatHistory = [];
+let chartInstance = null;
+let quantChartInstance = null;
+
+function renderLnb(gnbKey) {
+  const nav = document.getElementById("lnb-nav");
+  const titleEl = document.getElementById("lnb-section-title");
+  const menu = GNB_MENUS[gnbKey];
+  if (titleEl) titleEl.innerHTML = menu.label;
+  nav.innerHTML = menu.items.map(it => `
+    <div class="lnb-item ${it.key === currentView ? "active" : ""}" data-view="${it.key}">
+      <i class="${it.icon}" style="width:16px;text-align:center;font-size:13px;"></i>
+      <span>${it.label}</span>
+    </div>
+  `).join("");
+  nav.querySelectorAll(".lnb-item").forEach(el => {
+    el.addEventListener("click", () => navigate(el.dataset.view));
+  });
+}
+
+function navigate(viewKey) {
+  // Find gnb section for this view
+  for (const [gnbKey, menu] of Object.entries(GNB_MENUS)) {
+    if (menu.items.some(it => it.key === viewKey)) {
+      currentGnb = gnbKey;
+      break;
     }
-    function closeCanvas() {
-      overlay.classList.add("hidden");
-      offcanvas.style.transform = "translateX(-100%)";
-    }
-    menuBtn?.addEventListener("click", openCanvas);
-    closeBtn?.addEventListener("click", closeCanvas);
-    overlay?.addEventListener("click", closeCanvas);
+  }
+  currentView = viewKey;
 
-    const views = ["chat","ingest","library","settings"];
-    function show(route) {
-      for (const v of views) {
-        document.getElementById("view-" + v).classList.toggle("hidden", v !== route);
-      }
-      document.querySelectorAll(".nav-item").forEach(a => {
-        a.classList.toggle("bg-white/10", a.dataset.route === route);
-        a.classList.toggle("border-white/10", a.dataset.route === route);
+  // Update GNB
+  document.querySelectorAll("[data-gnb]").forEach(el => {
+    el.classList.toggle("active", el.dataset.gnb === currentGnb);
+  });
+
+  // Update LNB
+  renderLnb(currentGnb);
+
+  // Show/hide views
+  document.querySelectorAll(".view").forEach(el => {
+    el.classList.toggle("active", el.dataset.view === viewKey);
+  });
+
+  location.hash = viewKey;
+  onViewActivated(viewKey);
+}
+
+// GNB click
+document.querySelectorAll("[data-gnb]").forEach(el => {
+  el.addEventListener("click", () => {
+    const gnbKey = el.dataset.gnb;
+    const firstView = GNB_MENUS[gnbKey].items[0].key;
+    navigate(firstView);
+  });
+});
+
+// ── Boot ──────────────────────────────────────────────────────────
+async function boot() {
+  try {
+    const { user } = await getMe();
+    document.getElementById("user-name").textContent = user.name;
+    loadMarketTicker();
+    const hash = location.hash.replace("#", "");
+    navigate(hash && document.querySelector(`[data-view="${hash}"]`) ? hash : "agent-chat");
+  } catch {
+    location.href = "/login.html";
+  }
+}
+
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  await api("/api/auth/logout", { method: "POST" }).catch(() => {});
+  location.href = "/";
+});
+
+// ── Market Ticker ─────────────────────────────────────────────────
+async function loadMarketTicker() {
+  try {
+    const { indices } = await api("/api/stocks/market");
+    const el = document.getElementById("market-ticker");
+    el.classList.remove("hidden");
+    el.innerHTML = indices.map(idx => {
+      const pct = idx.change_pct;
+      const sign = pct >= 0 ? "+" : "";
+      const cls = pct >= 0 ? "text-emerald-400" : "text-red-400";
+      return `<span>${idx.name}: <span class="${cls}">${fmt(idx.price)} (${sign}${pct?.toFixed(2)}%)</span></span>`;
+    }).join(" | ");
+  } catch {}
+}
+
+// ── 기업분석 (Mockup) ────────────────────────────────────────────
+const COMPANIES = [
+  { code:"005930", name:"삼성전자",      sector:"반도체/전자",  market:"KOSPI" },
+  { code:"000660", name:"SK하이닉스",    sector:"반도체",       market:"KOSPI" },
+  { code:"035420", name:"NAVER",         sector:"IT플랫폼",     market:"KOSPI" },
+  { code:"005380", name:"현대자동차",    sector:"자동차",       market:"KOSPI" },
+  { code:"105560", name:"KB금융",        sector:"금융",         market:"KOSPI" },
+];
+
+const CO_DATA = {
+  "005930": {
+    price:73400, chg:1.43, cap:4378000, per:16.2, pbr:1.45, eps:4532, bps:50600,
+    roe:9.1, roa:5.2, debt:36.4, div:1416, divYield:1.93, opMargin:12.4,
+    revenue:[302300,258940,305100,320400], op:[35200,8490,25400,34900],
+    net:[29600,7280,21800,28700], quarters:["23Q2","23Q3","23Q4","24Q1"],
+    assets:4263000, equity:3012000, liabilities:1251000, cash:98400,
+  },
+  "000660": {
+    price:192800, chg:2.11, cap:1403000, per:28.4, pbr:2.18, eps:6789, bps:88400,
+    roe:7.8, roa:4.9, debt:41.2, div:1200, divYield:0.62, opMargin:8.7,
+    revenue:[102300,91240,108700,119600], op:[8900,3280,9870,12400],
+    net:[7200,2800,8100,10300], quarters:["23Q2","23Q3","23Q4","24Q1"],
+    assets:963000, equity:663000, liabilities:300000, cash:42300,
+  },
+  "035420": {
+    price:198500, chg:-0.91, cap:325000, per:32.1, pbr:3.42, eps:6180, bps:58000,
+    roe:10.6, roa:6.8, debt:22.1, div:948, divYield:0.48, opMargin:18.2,
+    revenue:[22100,23400,25600,27800], op:[3980,4310,4740,5120],
+    net:[3100,3380,3720,4010], quarters:["23Q2","23Q3","23Q4","24Q1"],
+    assets:263000, equity:188000, liabilities:75000, cash:31800,
+  },
+  "005380": {
+    price:214500, chg:1.61, cap:457000, per:5.8, pbr:0.72, eps:37000, bps:297000,
+    roe:12.4, roa:5.9, debt:148.3, div:8000, divYield:3.73, opMargin:9.1,
+    revenue:[403800,422100,465200,498700], op:[36400,38400,42700,45400],
+    net:[33800,35600,40100,43200], quarters:["23Q2","23Q3","23Q4","24Q1"],
+    assets:2743000, equity:630000, liabilities:2113000, cash:78200,
+  },
+  "105560": {
+    price:78200, chg:0.38, cap:330000, per:6.4, pbr:0.58, eps:12200, bps:134000,
+    roe:9.2, roa:0.6, debt:872.1, div:3060, divYield:3.91, opMargin:null,
+    revenue:[154200,162300,178400,189700], op:[18400,19100,21200,22800],
+    net:[14200,14900,16700,18100], quarters:["23Q2","23Q3","23Q4","24Q1"],
+    assets:6824000, equity:407000, liabilities:6417000, cash:null,
+  },
+};
+
+let selectedCompany = "005930";
+
+function loadCompanyDashboard() {
+  renderCompanyTabs();
+  renderCompanyData();
+}
+
+function renderCompanyTabs() {
+  const el = document.getElementById("company-tabs");
+  if (!el) return;
+  el.innerHTML = COMPANIES.map(c => `
+    <button onclick="selectCompany('${c.code}')"
+      style="padding:5px 14px; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid ${selectedCompany===c.code?"var(--accent)":"var(--border)"}; background:${selectedCompany===c.code?"var(--accent)":"var(--surf)"}; color:${selectedCompany===c.code?"#fff":"var(--text-dim)"}; transition:all .15s;">
+      ${escHtml(c.name)}
+    </button>
+  `).join("");
+}
+
+function selectCompany(code) {
+  selectedCompany = code;
+  renderCompanyTabs();
+  renderCompanyData();
+}
+window.selectCompany = selectCompany;
+
+function renderCompanyData() {
+  const d = CO_DATA[selectedCompany];
+  const co = COMPANIES.find(c => c.code === selectedCompany);
+  if (!d || !co) return;
+
+  const pctColor = d.chg >= 0 ? "var(--green)" : "var(--red)";
+  const sign = d.chg >= 0 ? "+" : "";
+
+  // 개요 카드 4개
+  document.getElementById("co-overview").innerHTML = [
+    { label:"현재가", value:`${fmt(d.price)}원`, sub:`${sign}${d.chg}%`, subColor:pctColor },
+    { label:"시가총액", value:`${fmt(Math.round(d.cap/10000))}조원`, sub:co.sector },
+    { label:"EPS", value:`${fmt(d.eps)}원`, sub:`PER ${d.per}x` },
+    { label:"BPS", value:`${fmt(d.bps)}원`, sub:`PBR ${d.pbr}x` },
+  ].map(c => `
+    <div class="card" style="padding:16px;">
+      <div class="text-xs" style="color:var(--text-mute);">${c.label}</div>
+      <div style="font-size:20px; font-weight:700; margin:4px 0;">${c.value}</div>
+      <div style="font-size:12px; color:${c.subColor||"var(--text-dim)"};">${c.sub}</div>
+    </div>
+  `).join("");
+
+  // 밸류에이션
+  const valRows = [
+    ["PER (주가수익비율)", `${d.per}x`],
+    ["PBR (주가순자산비율)", `${d.pbr}x`],
+    ["EV/EBITDA", `${(d.per*0.62).toFixed(1)}x`],
+    ["배당수익률", `${d.divYield}%`],
+    ["주당배당금 (DPS)", `${fmt(d.div)}원`],
+  ];
+  document.getElementById("co-valuation").innerHTML = valRows.map(([k,v]) => `
+    <div class="flex justify-between items-center" style="padding:7px 0; border-bottom:1px solid var(--border);">
+      <span style="font-size:12px; color:var(--text-dim);">${k}</span>
+      <span style="font-size:13px; font-weight:600;">${v}</span>
+    </div>
+  `).join("");
+
+  // 수익성
+  const profRows = [
+    ["ROE (자기자본이익률)", `${d.roe}%`],
+    ["ROA (총자산이익률)", `${d.roa}%`],
+    ["영업이익률", d.opMargin ? `${d.opMargin}%` : "N/A (금융)"],
+    ["부채비율", `${d.debt}%`],
+    ["자기자본비율", `${(100/(1+d.debt/100)).toFixed(1)}%`],
+  ];
+  document.getElementById("co-profitability").innerHTML = profRows.map(([k,v]) => `
+    <div class="flex justify-between items-center" style="padding:7px 0; border-bottom:1px solid var(--border);">
+      <span style="font-size:12px; color:var(--text-dim);">${k}</span>
+      <span style="font-size:13px; font-weight:600;">${v}</span>
+    </div>
+  `).join("");
+
+  // 분기 실적
+  const qs = d.quarters;
+  document.getElementById("co-quarterly").innerHTML = `
+    <table>
+      <thead><tr><th>구분</th>${qs.map(q=>`<th style="text-align:right;">${q}</th>`).join("")}</tr></thead>
+      <tbody>
+        <tr><td style="color:var(--text-dim);font-size:12px;">매출액 (억원)</td>${d.revenue.map(v=>`<td style="text-align:right;font-weight:600;">${fmt(v)}</td>`).join("")}</tr>
+        <tr><td style="color:var(--text-dim);font-size:12px;">영업이익 (억원)</td>${d.op.map(v=>`<td style="text-align:right;color:var(--green);font-weight:600;">${fmt(v)}</td>`).join("")}</tr>
+        <tr><td style="color:var(--text-dim);font-size:12px;">순이익 (억원)</td>${d.net.map(v=>`<td style="text-align:right;color:var(--accent);font-weight:600;">${fmt(v)}</td>`).join("")}</tr>
+      </tbody>
+    </table>`;
+
+  // 재무상태표
+  document.getElementById("co-balance").innerHTML = `
+    <table>
+      <thead><tr><th>항목</th><th style="text-align:right;">금액 (억원)</th><th style="text-align:right;">비중</th></tr></thead>
+      <tbody>
+        <tr><td style="color:var(--text-dim);font-size:12px;">총자산</td><td style="text-align:right;font-weight:700;">${fmt(d.assets)}</td><td style="text-align:right;">100%</td></tr>
+        <tr><td style="color:var(--text-dim);font-size:12px;">자기자본</td><td style="text-align:right;font-weight:600;color:var(--green);">${fmt(d.equity)}</td><td style="text-align:right;">${(d.equity/d.assets*100).toFixed(1)}%</td></tr>
+        <tr><td style="color:var(--text-dim);font-size:12px;">부채총계</td><td style="text-align:right;font-weight:600;color:var(--red);">${fmt(d.liabilities)}</td><td style="text-align:right;">${(d.liabilities/d.assets*100).toFixed(1)}%</td></tr>
+        ${d.cash ? `<tr><td style="color:var(--text-dim);font-size:12px;">현금및현금성자산</td><td style="text-align:right;">${fmt(d.cash)}</td><td style="text-align:right;">-</td></tr>` : ""}
+      </tbody>
+    </table>`;
+}
+
+function loadCompanyCompare() {
+  const cols = ["PER","PBR","ROE","ROA","부채비율","배당수익률","영업이익률"];
+  const getVal = (d, col) => ({
+    "PER":`${d.per}x`, "PBR":`${d.pbr}x`,
+    "ROE":`${d.roe}%`, "ROA":`${d.roa}%`,
+    "부채비율":`${d.debt}%`, "배당수익률":`${d.divYield}%`,
+    "영업이익률": d.opMargin ? `${d.opMargin}%` : "N/A",
+  }[col]);
+  const el = document.getElementById("co-compare-table");
+  el.innerHTML = `<table>
+    <thead><tr><th>지표</th>${COMPANIES.map(c=>`<th style="text-align:right;">${escHtml(c.name)}</th>`).join("")}</tr></thead>
+    <tbody>${cols.map(col=>`
+      <tr><td style="color:var(--text-dim);font-size:12px;font-weight:600;">${col}</td>
+      ${COMPANIES.map(c=>`<td style="text-align:right;font-weight:600;">${getVal(CO_DATA[c.code],col)}</td>`).join("")}
+      </tr>`).join("")}
+    </tbody>
+  </table>`;
+}
+
+function loadCompanySector() {
+  const sectors = [
+    { name:"반도체", companies:["삼성전자","SK하이닉스"], avgPer:22.3, avgPbr:1.82, outlook:"긍정" },
+    { name:"IT 플랫폼", companies:["NAVER","카카오"], avgPer:38.7, avgPbr:2.94, outlook:"중립" },
+    { name:"자동차", companies:["현대차","기아"], avgPer:6.2, avgPbr:0.81, outlook:"긍정" },
+    { name:"금융", companies:["KB금융","신한지주"], avgPer:6.8, avgPbr:0.62, outlook:"중립" },
+    { name:"에너지", companies:["LG에너지솔루션","포스코홀딩스"], avgPer:41.2, avgPbr:2.15, outlook:"부정" },
+    { name:"소비재", companies:["LG생활건강","아모레퍼시픽"], avgPer:28.4, avgPbr:1.73, outlook:"중립" },
+  ];
+  const outlookColor = o => o==="긍정" ? "var(--green)" : o==="부정" ? "var(--red)" : "var(--text-mute)";
+  document.getElementById("co-sector-cards").innerHTML = sectors.map(s => `
+    <div class="card">
+      <div class="flex items-center justify-between mb-3">
+        <span class="font-semibold">${escHtml(s.name)}</span>
+        <span style="font-size:11px; font-weight:700; color:${outlookColor(s.outlook)};">${s.outlook}</span>
+      </div>
+      <div class="text-xs" style="color:var(--text-mute); margin-bottom:8px;">${s.companies.join(" · ")}</div>
+      <div class="flex gap-4">
+        <div><div class="text-xs" style="color:var(--text-mute);">평균 PER</div><div style="font-size:16px; font-weight:700;">${s.avgPer}x</div></div>
+        <div><div class="text-xs" style="color:var(--text-mute);">평균 PBR</div><div style="font-size:16px; font-weight:700;">${s.avgPbr}x</div></div>
+      </div>
+    </div>
+  `).join("");
+}
+
+// ── View Activation ───────────────────────────────────────────────
+function onViewActivated(view) {
+  if (view === "trading-chart") loadStockChart();
+  if (view === "trading-portfolio") loadPortfolio();
+  if (view === "trading-order") { loadOrderHistory(); loadBrokerStatus(); }
+  if (view === "quant-dashboard") { loadQuantDashboard(); }
+  if (view === "quant-auto") loadAutoTradeStatus();
+  if (view === "settings") loadSettings();
+  if (view === "crawl-manual") loadCrawlList();
+  if (view === "us-dashboard")  loadUsDashboard();
+  if (view === "us-chart")      loadUsChart();
+  if (view === "us-order")      renderUsOrders();
+  if (view === "us-portfolio")  loadUsPortfolio();
+  if (view === "company-dashboard") loadCompanyDashboard();
+  if (view === "company-compare")   loadCompanyCompare();
+  if (view === "company-sector")    loadCompanySector();
+  if (view === "sysadmin-dashboard") loadSystemDashboard();
+}
+
+// ── 1. AI 채팅 ────────────────────────────────────────────────────
+function appendUserMsg(text) {
+  const d = document.createElement("div");
+  d.className = "flex justify-end";
+  d.innerHTML = `<div class="max-w-[80%] px-4 py-3 text-sm leading-relaxed" style="background:var(--accent);color:#fff;border-radius:18px 4px 18px 18px;box-shadow:0 2px 8px rgba(41,98,255,0.25);">${escHtml(text)}</div>`;
+  document.getElementById("chat-messages").appendChild(d);
+  scrollChat();
+}
+
+function appendAssistantMsg(answer, steps) {
+  const msgId = "m" + Date.now();
+  let stepsHtml = "";
+  if (steps?.length) {
+    const items = steps.map((s, i) => {
+      const obs = s.observation ? `<div class="mt-1 text-slate-500 bg-black/20 rounded p-2 max-h-24 overflow-y-auto">${escHtml(s.observation.slice(0, 300))}</div>` : "";
+      return `<div class="step-${escHtml(s.action)} pl-3 py-1 mb-1">
+        <div class="text-xs font-medium text-slate-300">${i+1}. ${escHtml(s.action)}</div>
+        <div class="text-xs text-slate-500 italic">${escHtml(s.thought)}</div>${obs}
+      </div>`;
+    }).join("");
+    stepsHtml = `<div class="mt-2 border-t border-white/10 pt-2">
+      <button class="steps-btn text-xs text-slate-500 hover:text-slate-300" data-target="${msgId}-steps">▶ 추론 (${steps.length}단계)</button>
+      <div id="${msgId}-steps" class="hidden mt-1">${items}</div>
+    </div>`;
+  }
+  const d = document.createElement("div");
+  d.className = "flex justify-start";
+  d.innerHTML = `<div class="max-w-[88%] px-4 py-3 text-sm leading-relaxed" style="background:var(--surf);border:1px solid var(--border);border-radius:4px 18px 18px 18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);color:var(--text);">
+    <pre style="white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13px;line-height:1.7;">${escHtml(answer)}</pre>${stepsHtml}
+  </div>`;
+  d.querySelectorAll(".steps-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const p = document.getElementById(btn.dataset.target);
+      p?.classList.toggle("hidden");
+      btn.textContent = p?.classList.contains("hidden") ? "▶ 추론" : "▼ 추론";
+    });
+  });
+  document.getElementById("chat-messages").appendChild(d);
+  scrollChat();
+}
+
+function scrollChat() {
+  const c = document.getElementById("chat-messages");
+  c.scrollTop = c.scrollHeight;
+}
+
+async function sendChat() {
+  const inp = document.getElementById("chat-input");
+  const q = inp.value.trim();
+  if (!q) return;
+  inp.value = "";
+  appendUserMsg(q);
+
+  // thinking indicator
+  const thinking = document.createElement("div");
+  thinking.id = "thinking";
+  thinking.className = "flex justify-start";
+  thinking.innerHTML = `<div class="px-4 py-3 text-sm animate-pulse" style="background:var(--surf);border:1px solid var(--border);border-radius:4px 18px 18px 18px;color:var(--text-mute);display:inline-block;"><i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px;color:var(--accent);"></i>에이전트 분석 중...</div>`;
+  document.getElementById("chat-messages").appendChild(thinking);
+  scrollChat();
+
+  try {
+    const res = await api("/api/chat", { method: "POST", body: { question: q, history: chatHistory } });
+    document.getElementById("thinking")?.remove();
+    chatHistory.push({ role: "user", content: q });
+    chatHistory.push({ role: "assistant", content: res.answer });
+    if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+    appendAssistantMsg(res.answer, res.steps);
+  } catch (e) {
+    document.getElementById("thinking")?.remove();
+    setToast(e.message, "error");
+  }
+}
+
+document.getElementById("chat-send").addEventListener("click", sendChat);
+document.getElementById("chat-input").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+});
+document.getElementById("clear-chat").addEventListener("click", () => {
+  chatHistory = [];
+  document.getElementById("chat-messages").innerHTML = "";
+  setToast("대화 초기화됨", "ok");
+});
+
+// ── CB 분석 ───────────────────────────────────────────────────────
+async function runCbQuery(type) {
+  const resultEl = document.getElementById(`${type}-result`);
+  resultEl.textContent = "조회 중...";
+  try {
+    let q;
+    if (type === "pcb") {
+      const period = document.getElementById("pcb-period").value;
+      const gender = document.getElementById("pcb-gender").value;
+      const age = document.getElementById("pcb-age").value;
+      q = `개인 CB 신용 통계를 조회해줘.${period ? " 기준월:" + period : ""}${gender ? " 성별:" + gender : ""}${age ? " 연령대:" + age : ""}`;
+    } else {
+      const period = document.getElementById("ccb-period").value;
+      const size = document.getElementById("ccb-size").value;
+      const ind = document.getElementById("ccb-industry").value;
+      q = `기업 CB 신용 통계를 조회해줘.${period ? " 기간:" + period : ""}${size ? " 규모:" + size : ""}${ind ? " 업종:" + ind : ""}`;
+    }
+    const res = await api("/api/chat", { method: "POST", body: { question: q, history: [] } });
+    resultEl.textContent = res.answer;
+  } catch (e) {
+    resultEl.textContent = "오류: " + e.message;
+  }
+}
+document.getElementById("pcb-search").addEventListener("click", () => runCbQuery("pcb"));
+document.getElementById("ccb-search").addEventListener("click", () => runCbQuery("ccb"));
+
+// ── 금융상품 ──────────────────────────────────────────────────────
+let productTab = "bank";
+document.querySelectorAll(".product-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    productTab = btn.dataset.tab;
+    document.getElementById("bank-search-form").classList.toggle("hidden", productTab !== "bank");
+    document.getElementById("fund-search-form").classList.toggle("hidden", productTab !== "fund");
+    document.querySelectorAll(".product-tab").forEach(b => {
+      b.className = b === btn ? "product-tab btn-primary" : "product-tab btn-secondary";
+    });
+  });
+});
+
+async function searchProducts() {
+  const el = document.getElementById("product-results");
+  el.innerHTML = "<div class='text-slate-400'>검색 중...</div>";
+  try {
+    let q;
+    if (productTab === "bank") {
+      const rate = document.getElementById("bank-rate").value;
+      const kw = document.getElementById("bank-keyword").value;
+      q = `은행 수신상품을 검색해줘.${rate ? " 최소금리:" + rate + "%" : ""}${kw ? " 키워드:" + kw : ""}`;
+    } else {
+      const type = document.getElementById("fund-type").value;
+      const ret = document.getElementById("fund-return").value;
+      const kw = document.getElementById("fund-keyword").value;
+      q = `공모펀드를 검색해줘.${type ? " 유형:" + type : ""}${ret ? " 최소1년수익률:" + ret + "%" : ""}${kw ? " 키워드:" + kw : ""}`;
+    }
+    const res = await api("/api/chat", { method: "POST", body: { question: q, history: [] } });
+    el.innerHTML = `<pre class="text-xs text-slate-300 bg-black/30 rounded-xl p-3">${escHtml(res.answer)}</pre>`;
+  } catch (e) {
+    el.innerHTML = `<div class='text-red-400'>${escHtml(e.message)}</div>`;
+  }
+}
+document.getElementById("bank-search").addEventListener("click", searchProducts);
+document.getElementById("fund-search").addEventListener("click", searchProducts);
+
+// ── 뉴스/RAG ─────────────────────────────────────────────────────
+document.getElementById("news-search").addEventListener("click", async () => {
+  const q = document.getElementById("news-q").value.trim();
+  const el = document.getElementById("news-results");
+  if (!q) return;
+  el.innerHTML = "<div class='text-slate-400'>검색 중...</div>";
+  try {
+    const res = await api(`/api/library/search?q=${encodeURIComponent(q)}&category=news`);
+    if (!res.items?.length) { el.innerHTML = "<div class='text-slate-400'>결과 없음</div>"; return; }
+    el.innerHTML = res.items.map(item => `
+      <div class="card"><div class="text-xs text-indigo-300 mb-1">${escHtml(item.type)}</div>
+      <pre class="text-xs text-slate-300">${escHtml(item.content)}</pre></div>
+    `).join("");
+  } catch (e) { el.innerHTML = `<div class='text-red-400'>${escHtml(e.message)}</div>`; }
+});
+
+// ── 크롤링 ───────────────────────────────────────────────────────
+document.getElementById("auto-crawl-btn").addEventListener("click", async () => {
+  const log = document.getElementById("crawl-log");
+  log.textContent = "크롤링 시작...";
+  try {
+    const res = await api("/api/ingest/crawl/auto", { method: "POST" });
+    log.textContent = res.log.join("\n");
+    setToast("크롤링 완료", "ok");
+  } catch (e) { log.textContent += "\n[ERROR] " + e.message; setToast(e.message, "error"); }
+});
+
+document.getElementById("manual-crawl-btn").addEventListener("click", async () => {
+  const url = document.getElementById("crawl-url").value.trim();
+  const log = document.getElementById("manual-crawl-log");
+  if (!url) return setToast("URL을 입력하세요.", "error");
+  log.textContent = "크롤링 중...";
+  try {
+    const res = await api("/api/ingest/crawl/url", { method: "POST", body: { url } });
+    log.textContent = res.log.join("\n");
+    setToast(`${res.chunks}청크 저장 완료`, "ok");
+    loadCrawlList();
+  } catch (e) { log.textContent += "\n[ERROR] " + e.message; setToast(e.message, "error"); }
+});
+
+async function loadCrawlList() {
+  try {
+    const { items } = await api("/api/ingest/crawl/list");
+    const el = document.getElementById("crawl-list");
+    el.innerHTML = items.map(it => `
+      <div class="rounded-xl border border-white/10 bg-black/20 p-2">
+        <div class="text-slate-300">${escHtml(it.title || it.url)}</div>
+        <div class="text-xs text-slate-500">${escHtml(it.source)} · ${it.crawled_at?.slice(0,10)}</div>
+      </div>
+    `).join("") || "<div class='text-slate-400 text-xs'>크롤링된 문서가 없습니다.</div>";
+  } catch {}
+}
+
+document.getElementById("ingest-btn").addEventListener("click", async () => {
+  const log = document.getElementById("ingest-log");
+  log.textContent = "인제스트 시작 (수 분 소요)...";
+  try {
+    const res = await api("/api/ingest/financial", { method: "POST" });
+    log.textContent = res.log.join("\n");
+    setToast("인제스트 완료", "ok");
+  } catch (e) { log.textContent += "\n[ERROR] " + e.message; setToast(e.message, "error"); }
+});
+
+document.getElementById("admin-reset-btn").addEventListener("click", async () => {
+  if (!confirm("DB를 초기화하시겠습니까?")) return;
+  try {
+    const res = await api("/api/admin/reset", { method: "POST" });
+    document.getElementById("ingest-log").textContent = res.message;
+    setToast("초기화 완료", "ok");
+  } catch (e) { setToast(e.message, "error"); }
+});
+
+// ── 주가 차트 ────────────────────────────────────────────────────
+async function loadStockChart() {
+  const symbol = document.getElementById("chart-symbol").value.trim() || "005930.KS";
+  const period = document.getElementById("chart-period").value;
+  const infoEl = document.getElementById("stock-info");
+  const container = document.getElementById("chart-container");
+
+  infoEl.textContent = "로딩 중...";
+  try {
+    const [quote, candles] = await Promise.all([
+      api(`/api/stocks/quote?symbol=${encodeURIComponent(symbol)}`),
+      api(`/api/stocks/candles?symbol=${encodeURIComponent(symbol)}&period=${period}`),
+    ]);
+
+    const price = quote.price ?? "-";
+    const prevClose = quote.prev_close ?? 0;
+    const chg = prevClose ? ((price - prevClose) / prevClose * 100).toFixed(2) : null;
+    const chgClass = chg >= 0 ? "text-emerald-400" : "text-red-400";
+    infoEl.innerHTML = `<span class="font-semibold">${escHtml(symbol)}</span>
+      <span class="ml-3">${fmt(price)}</span>
+      ${chg != null ? `<span class="ml-2 ${chgClass}">${chg >= 0 ? "+" : ""}${chg}%</span>` : ""}`;
+
+    // Chart
+    container.innerHTML = "";
+    if (typeof LightweightCharts === "undefined") {
+      container.textContent = "차트 라이브러리 로드 중...";
+      return;
+    }
+    if (chartInstance) { chartInstance.remove(); chartInstance = null; }
+    const chart = LightweightCharts.createChart(container, {
+      layout: { background: { color: "#ffffff" }, textColor: "#434651" },
+      grid: { vertLines: { color: "#e0e3eb" }, horzLines: { color: "#e0e3eb" } },
+      width: container.clientWidth,
+      height: 380,
+    });
+    chartInstance = chart;
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: "#10b981", downColor: "#ef4444",
+      borderUpColor: "#10b981", borderDownColor: "#ef4444",
+      wickUpColor: "#10b981", wickDownColor: "#ef4444",
+    });
+    const data = candles.candles
+      .filter(c => c.open && c.high && c.low && c.close)
+      .map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
+    candleSeries.setData(data);
+    chart.timeScale().fitContent();
+  } catch (e) {
+    infoEl.textContent = "오류: " + e.message;
+  }
+}
+
+document.getElementById("chart-load").addEventListener("click", loadStockChart);
+
+// ── 포트폴리오 ───────────────────────────────────────────────────
+async function loadPortfolio() {
+  try {
+    const { holdings } = await api("/api/portfolio");
+    const el = document.getElementById("portfolio-table");
+    if (!holdings.length) { el.innerHTML = "<div class='text-slate-400 text-xs'>보유 종목이 없습니다.</div>"; return; }
+    el.innerHTML = `<table class="w-full text-xs border-collapse">
+      <thead><tr class="text-slate-400 border-b border-white/10">
+        <th class="py-2 text-left">종목</th><th class="py-2 text-right">수량</th>
+        <th class="py-2 text-right">평균단가</th><th class="py-2 text-right">평가금액(예상)</th>
+        <th class="py-2 text-right">조작</th>
+      </tr></thead>
+      <tbody>
+        ${holdings.map(h => `
+          <tr class="border-b border-white/5">
+            <td class="py-2">${escHtml(h.name)}<div class="text-slate-500">${escHtml(h.symbol)}</div></td>
+            <td class="py-2 text-right">${fmt(h.quantity)}</td>
+            <td class="py-2 text-right">${fmt(h.avg_price)}</td>
+            <td class="py-2 text-right text-slate-400">-</td>
+            <td class="py-2 text-right">
+              <button class="text-red-400 hover:text-red-300 delete-holding" data-symbol="${escHtml(h.symbol)}">삭제</button>
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>`;
+    el.querySelectorAll(".delete-holding").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        await api(`/api/portfolio/${encodeURIComponent(btn.dataset.symbol)}`, { method: "DELETE" });
+        loadPortfolio();
       });
-      history.replaceState(null, "", "/app.html#" + route);
-      closeCanvas();
-    }
-    document.querySelectorAll(".nav-item").forEach(a => {
-      a.addEventListener("click", () => show(a.dataset.route));
     });
+  } catch {}
+}
 
-    async function boot() {
-      try {
-        const me = await getMe();
-        document.getElementById("userPill").classList.remove("hidden");
-        document.getElementById("userName").textContent = me.user.name;
-        document.getElementById("sName").textContent = me.user.name;
-        document.getElementById("sEmail").textContent = me.user.email;
-        document.getElementById("sClient").textContent = me.user.clientId;
-        const sRolesEl = document.getElementById("sRoles");
-        if (sRolesEl) sRolesEl.textContent = (me.user.roles || []).join(", ") || "user";
+document.getElementById("pf-add").addEventListener("click", async () => {
+  const symbol = document.getElementById("pf-symbol").value.trim();
+  const name = document.getElementById("pf-name").value.trim();
+  const qty = parseInt(document.getElementById("pf-qty").value);
+  const price = parseFloat(document.getElementById("pf-price").value);
+  if (!symbol || !name || !qty || !price) return setToast("모든 항목을 입력하세요.", "error");
+  try {
+    await api("/api/portfolio", { method: "POST", body: { symbol, name, quantity: qty, avg_price: price } });
+    setToast("추가 완료", "ok");
+    loadPortfolio();
+  } catch (e) { setToast(e.message, "error"); }
+});
 
-        const hash = (location.hash || "#chat").replace("#","");
-        show(views.includes(hash) ? hash : "chat");
-      } catch (e) {
-        location.href = "/login.html";
-      }
-    }
+// ── 주문 ─────────────────────────────────────────────────────────
+async function placeOrder(type) {
+  const symbol = document.getElementById("ord-symbol").value.trim();
+  const name = document.getElementById("ord-name").value.trim();
+  const price = parseFloat(document.getElementById("ord-price").value);
+  const qty = parseInt(document.getElementById("ord-qty").value);
+  const broker = document.getElementById("ord-broker").value;
+  if (!symbol || !name || !price || !qty) return setToast("모든 항목을 입력하세요.", "error");
+  try {
+    await api("/api/orders", { method: "POST", body: { symbol, name, order_type: type, quantity: qty, price, broker } });
+    setToast(`${type === "buy" ? "매수" : "매도"} 주문 완료 (${broker})`, "ok");
+    loadOrderHistory();
+  } catch (e) { setToast(e.message, "error"); }
+}
+document.getElementById("ord-buy").addEventListener("click", () => placeOrder("buy"));
+document.getElementById("ord-sell").addEventListener("click", () => placeOrder("sell"));
 
-    // Logout
-    document.getElementById("logoutBtn").addEventListener("click", async () => {
-      try {
-        await api("/api/auth/logout", { method: "POST" });
-        location.href = "/";
-      } catch (e) {
-        setToast(e.message, "error");
-      }
+async function loadOrderHistory() {
+  try {
+    const { orders } = await api("/api/orders");
+    const el = document.getElementById("order-history");
+    el.innerHTML = orders.slice(0, 20).map(o => `
+      <div class="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs">
+        <span class="${o.order_type === "buy" ? "badge-buy" : "badge-sell"}">${o.order_type === "buy" ? "매수" : "매도"}</span>
+        <span class="ml-2">${escHtml(o.name)} (${escHtml(o.symbol)})</span>
+        <span class="ml-auto">${fmt(o.price)}원 × ${fmt(o.quantity)}주</span>
+        <span class="ml-3 text-slate-500">${escHtml(o.broker)} · ${(o.created_at||"").slice(0,10)}</span>
+      </div>
+    `).join("") || "<div class='text-slate-400'>주문 내역 없음</div>";
+  } catch {}
+}
+
+async function loadBrokerStatus() {
+  try {
+    const s = await api("/api/broker/settings");
+    document.getElementById("broker-status").innerHTML = `
+      <div>키움증권: <span class="${s.kiwoom_connected ? "text-emerald-400" : "text-red-400"}">${s.kiwoom_connected ? "연동됨 (" + s.kiwoom_app_key + ")" : "미연동"}</span></div>
+      <div>토스증권: <span class="${s.toss_connected ? "text-emerald-400" : "text-red-400"}">${s.toss_connected ? "연동됨 (" + s.toss_app_key + ")" : "미연동"}</span></div>
+    `;
+  } catch {}
+}
+document.getElementById("broker-save").addEventListener("click", async () => {
+  try {
+    await api("/api/broker/settings", { method: "POST", body: {
+      kiwoom_app_key: document.getElementById("kiwoom-key").value,
+      kiwoom_secret: document.getElementById("kiwoom-secret").value,
+      toss_app_key: document.getElementById("toss-key").value,
+      toss_secret: document.getElementById("toss-secret").value,
+    }});
+    setToast("설정 저장 완료", "ok");
+    loadBrokerStatus();
+  } catch (e) { setToast(e.message, "error"); }
+});
+
+// ── 퀀트 대시보드 ────────────────────────────────────────────────
+async function loadQuantDashboard() {
+  loadMarketCards();
+  loadSignalCards();
+  loadQuantChart();
+}
+
+async function loadMarketCards() {
+  try {
+    const { indices } = await api("/api/stocks/market");
+    document.getElementById("market-cards").innerHTML = indices.map(idx => {
+      const pct = idx.change_pct;
+      const sign = pct != null && pct >= 0 ? "+" : "";
+      const cls = pct != null && pct >= 0 ? "text-emerald-400" : "text-red-400";
+      return `<div class="rounded-xl border border-white/10 bg-black/20 p-3 text-center">
+        <div class="text-xs text-slate-400">${escHtml(idx.name)}</div>
+        <div class="text-lg font-semibold mt-1">${fmt(idx.price)}</div>
+        <div class="${cls} text-xs">${sign}${pct?.toFixed(2) ?? "-"}%</div>
+      </div>`;
+    }).join("");
+  } catch {}
+}
+
+async function loadSignalCards() {
+  const el = document.getElementById("signal-cards");
+  el.innerHTML = "<div class='col-span-5 text-slate-400 text-xs'>시그널 로딩 중...</div>";
+  try {
+    const { stocks } = await api("/api/stocks/quant/list");
+    const results = await Promise.allSettled(
+      stocks.map(s => api(`/api/stocks/quant/indicators?symbol=${encodeURIComponent(s.symbol)}&period=2y`))
+    );
+    el.innerHTML = stocks.map((s, i) => {
+      const r = results[i].status === "fulfilled" ? results[i].value : null;
+      const sig = r?.signal || {};
+      const price = r?.current_price;
+      const rsiV = r?.current_rsi;
+      const colorMap = { "강력 매수": "border-emerald-500/50 bg-emerald-500/10",
+        "매수": "border-emerald-500/30 bg-emerald-500/5",
+        "강력 매도": "border-red-500/50 bg-red-500/10",
+        "매도": "border-red-500/30 bg-red-500/5",
+        "관망": "border-white/10 bg-white/5" };
+      const cls = colorMap[sig.action] || "border-white/10 bg-white/5";
+      return `<div class="rounded-xl border p-2 ${cls}">
+        <div class="font-semibold">${escHtml(s.name)}</div>
+        <div class="text-slate-400 text-xs">${escHtml(s.symbol)}</div>
+        <div class="mt-1 font-medium">${fmt(price)}</div>
+        <div class="mt-1 text-xs font-semibold">${escHtml(sig.action || "-")}</div>
+        <div class="text-xs text-slate-500">RSI: ${rsiV?.toFixed(1) ?? "-"}</div>
+      </div>`;
+    }).join("");
+  } catch (e) {
+    el.innerHTML = `<div class='col-span-5 text-red-400 text-xs'>${escHtml(e.message)}</div>`;
+  }
+}
+
+async function loadQuantChart() {
+  const symbol = document.getElementById("quant-symbol").value;
+  const container = document.getElementById("quant-chart-container");
+  container.innerHTML = "";
+  try {
+    const data = await api(`/api/stocks/quant/indicators?symbol=${encodeURIComponent(symbol)}&period=2y`);
+    if (data.error) { container.textContent = data.error; return; }
+
+    if (typeof LightweightCharts === "undefined") return;
+    if (quantChartInstance) { quantChartInstance.remove(); quantChartInstance = null; }
+
+    const chart = LightweightCharts.createChart(container, {
+      layout: { background: { color: "#ffffff" }, textColor: "#434651" },
+      grid: { vertLines: { color: "#e0e3eb" }, horzLines: { color: "#e0e3eb" } },
+      width: container.clientWidth,
+      height: 380,
     });
+    quantChartInstance = chart;
 
-    // ── Chat (Multi-turn Agentic) ─────────────────────────────────
-    const chatMessages = document.getElementById("chatMessages");
-    const qEl = document.getElementById("q");
-    const askBtn = document.getElementById("askBtn");
-    const MAX_HISTORY_MESSAGES = 20;
-    let conversationHistory = [];
+    const lineSeries = chart.addLineSeries({ color: "#6366f1", lineWidth: 2 });
+    const ma20Series = chart.addLineSeries({ color: "#f59e0b", lineWidth: 1 });
+    const ma60Series = chart.addLineSeries({ color: "#10b981", lineWidth: 1 });
+    const bbUpperSeries = chart.addLineSeries({ color: "#6366f1", lineWidth: 1, lineStyle: 2 });
+    const bbLowerSeries = chart.addLineSeries({ color: "#6366f1", lineWidth: 1, lineStyle: 2 });
 
-    function escHtml(s) {
-      return String(s || "")
-        .replace(/&/g,"&amp;")
-        .replace(/</g,"&lt;")
-        .replace(/>/g,"&gt;")
-        .replace(/"/g,"&quot;")
-        .replace(/'/g,"&#39;");
-    }
+    const times = data.times || [];
+    const mapSeries = (arr) => arr.map((v, i) => v != null ? { time: times[i], value: v } : null).filter(Boolean);
 
-    function renderActionLabel(action) {
-      const map = { retrieve: "🔍 검색", final_answer: "✅ 답변 결정", clarify: "❓ 확인 요청" };
-      return map[action] || action;
-    }
+    lineSeries.setData(mapSeries(data.closes));
+    if (data.ma20) ma20Series.setData(mapSeries(data.ma20));
+    if (data.ma60) ma60Series.setData(mapSeries(data.ma60));
+    if (data.bb_upper) bbUpperSeries.setData(mapSeries(data.bb_upper));
+    if (data.bb_lower) bbLowerSeries.setData(mapSeries(data.bb_lower));
 
-    function renderDocTypeBadge(docType) {
-      const map = { law:"법령", case:"판결문", interpretation:"해석례", decision:"결정례" };
-      return map[docType] ? `<span class="text-indigo-300">[${map[docType]}]</span> ` : "";
-    }
+    chart.timeScale().fitContent();
+  } catch (e) {
+    container.textContent = "차트 오류: " + e.message;
+  }
+}
 
-    function appendUserMessage(text) {
-      const div = document.createElement("div");
-      div.className = "flex justify-end";
-      div.innerHTML = `
-        <div class="max-w-[80%] msg-bubble-user rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed">
-          ${escHtml(text)}
-        </div>`;
-      chatMessages.appendChild(div);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
+document.getElementById("quant-chart-load").addEventListener("click", loadQuantChart);
+document.getElementById("refresh-market").addEventListener("click", loadQuantDashboard);
 
-    function appendThinkingIndicator() {
-      const div = document.createElement("div");
-      div.id = "thinking-indicator";
-      div.className = "flex justify-start";
-      div.innerHTML = `
-        <div class="max-w-[80%] rounded-2xl rounded-tl-sm px-4 py-3 bg-white/5 border border-white/10 text-sm text-slate-400 animate-pulse">
-          에이전트가 추론 중...
-        </div>`;
-      chatMessages.appendChild(div);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-      return div;
-    }
+// ── 자동매매 ─────────────────────────────────────────────────────
+async function loadAutoTradeStatus() {
+  try {
+    const s = await api("/api/auto-trade/status");
+    document.getElementById("auto-trade-status").textContent =
+      s.running ? "🟢 실행 중" : "⭕ 정지";
+    const el = document.getElementById("auto-trade-log");
+    if (!s.log?.length) { el.innerHTML = "<div class='text-slate-400'>자동매매 로그가 없습니다.</div>"; return; }
+    el.innerHTML = [...s.log].reverse().map(cycle => {
+      const trades = (cycle.trades || []).map(t =>
+        `<div class="ml-3 text-slate-300">${t.action === "buy" ? "🟢매수" : "🔴매도"} ${escHtml(t.name)} ${fmt(t.quantity)}주 @${fmt(t.price)}</div>`
+      ).join("");
+      const sigs = (cycle.signals || []).map(sig =>
+        `<div class="ml-3 text-slate-500">${escHtml(sig.name||sig.symbol)}: ${escHtml(sig.action||"-")} (점수:${sig.score??"-"})</div>`
+      ).join("");
+      return `<div class="rounded-xl border border-white/10 bg-black/20 p-2 mb-1">
+        <div class="font-semibold text-indigo-300">${escHtml(cycle.time)}</div>
+        ${sigs}${trades ? '<div class="mt-1 font-medium text-xs">체결:</div>' + trades : ""}
+      </div>`;
+    }).join("");
+  } catch {}
+}
 
-    function removeThinkingIndicator() {
-      document.getElementById("thinking-indicator")?.remove();
-    }
+document.getElementById("auto-start").addEventListener("click", async () => {
+  try {
+    await api("/api/auto-trade/start", { method: "POST" });
+    setToast("자동매매 시작", "ok");
+    loadAutoTradeStatus();
+  } catch (e) { setToast(e.message, "error"); }
+});
+document.getElementById("auto-stop").addEventListener("click", async () => {
+  try {
+    await api("/api/auto-trade/stop", { method: "POST" });
+    setToast("자동매매 중지", "ok");
+    loadAutoTradeStatus();
+  } catch (e) { setToast(e.message, "error"); }
+});
+document.getElementById("auto-refresh").addEventListener("click", loadAutoTradeStatus);
 
-    function appendAssistantMessage(answer, steps, citations) {
-      const msgId = "msg-" + Date.now();
+// ── 백테스트 ─────────────────────────────────────────────────────
+document.getElementById("bt-load").addEventListener("click", async () => {
+  const symbol = document.getElementById("bt-symbol").value;
+  const el = document.getElementById("bt-result");
+  el.innerHTML = "<div class='text-slate-400'>분석 중 (10년치 데이터)...</div>";
+  try {
+    const data = await api(`/api/stocks/quant/indicators?symbol=${encodeURIComponent(symbol)}&period=10y`);
+    if (data.error) { el.innerHTML = `<div class='text-red-400'>${escHtml(data.error)}</div>`; return; }
+    const sig = data.signal || {};
+    el.innerHTML = `
+      <div class="rounded-xl border border-white/10 bg-black/20 p-4">
+        <div class="font-semibold text-indigo-300 mb-2">${escHtml(symbol)} 10년 퀀트 분석</div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>현재가: <span class="font-semibold">${fmt(data.current_price)}</span></div>
+          <div>현재 RSI: <span class="font-semibold">${data.current_rsi?.toFixed(2) ?? "-"}</span></div>
+          <div>AI 시그널: <span class="font-semibold ${sig.action === "매수" || sig.action === "강력 매수" ? "text-emerald-400" : sig.action === "매도" || sig.action === "강력 매도" ? "text-red-400" : "text-slate-300"}">${escHtml(sig.action||"-")}</span></div>
+          <div>시그널 점수: <span class="font-semibold">${sig.score ?? "-"}</span></div>
+        </div>
+        <div class="mt-3 text-xs text-slate-400">${(sig.reasons || []).map(r => "• " + escHtml(r)).join("<br>")}</div>
+      </div>
+    `;
+  } catch (e) { el.innerHTML = `<div class='text-red-400'>${escHtml(e.message)}</div>`; }
+});
 
-      // Build steps HTML
-      let stepsHtml = "";
-      if (steps && steps.length > 0) {
-        const stepItems = steps.map((s, i) => {
-          const argsText = s.action === "retrieve"
-            ? `검색어: <span class="text-indigo-300">${escHtml(s.args.query || "")}</span>${s.args.docType ? ` ${renderDocTypeBadge(s.args.docType)}` : ""}`
-            : (s.action === "clarify" ? escHtml(s.args.question || "") : "");
-          const obsHtml = s.observation
-            ? `<div class="mt-2 text-xs text-slate-500 bg-black/20 rounded-lg p-2 max-h-32 overflow-y-auto whitespace-pre-wrap">${escHtml(s.observation.slice(0, 400))}${s.observation.length > 400 ? "..." : ""}</div>`
-            : "";
-          return `
-            <div class="step-${escHtml(s.action)} pl-3 py-1.5 mb-2 last:mb-0">
-              <div class="text-xs font-medium text-slate-300">${escHtml(String(i+1))}. ${renderActionLabel(s.action)}</div>
-              ${argsText ? `<div class="text-xs text-slate-400 mt-0.5">${argsText}</div>` : ""}
-              <div class="text-xs text-slate-500 mt-0.5 italic">${escHtml(s.thought)}</div>
-              ${obsHtml}
-            </div>`;
-        }).join("");
-        stepsHtml = `
-          <div class="mt-3 border-t border-white/10 pt-2">
-            <button class="steps-toggle text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1" data-target="${msgId}-steps">
-              <span class="toggle-icon">▶</span> 추론 과정 (${steps.length}단계)
-            </button>
-            <div id="${msgId}-steps" class="steps-panel mt-2 space-y-1">${stepItems}</div>
-          </div>`;
-      }
+// ── 설정 (증권사 Open API) ────────────────────────────────────────
+async function loadSettings() {
+  try {
+    const cfg = await api("/api/broker/settings");
+    document.getElementById("broker-type").value   = cfg.broker || "mock";
+    document.getElementById("broker-app-key").value = cfg.app_key || "";
+    document.getElementById("broker-account").value = cfg.account_no || "";
+    document.getElementById("broker-paper").checked = cfg.paper !== false;
+    document.getElementById("broker-status").textContent =
+      cfg.connected ? `✅ 연결됨 (${cfg.broker})` : "⚠️ API 키 미설정 – Mockup 모드";
+  } catch {}
+}
 
-      // Build citations HTML
-      let citHtml = "";
-      if (citations && citations.length > 0) {
-        const citItems = citations.slice(0, 5).map((c, i) => {
-          const label = c.docId ? `${c.docId}@v${c.docVersion || 1}` : c.source;
-          return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-400" title="${escHtml(c.source)}">[C${i+1}] ${escHtml(label)}</span>`;
-        }).join(" ");
-        citHtml = `<div class="mt-2 flex flex-wrap gap-1">${citItems}</div>`;
-      }
-
-      const div = document.createElement("div");
-      div.className = "flex justify-start";
-      div.innerHTML = `
-        <div class="max-w-[88%] rounded-2xl rounded-tl-sm px-4 py-3 bg-white/5 border border-white/10">
-          <pre class="text-sm leading-relaxed whitespace-pre-wrap text-slate-100">${escHtml(answer)}</pre>
-          ${citHtml}
-          ${stepsHtml}
-        </div>`;
-
-      chatMessages.appendChild(div);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-
-      // Wire up steps toggle
-      div.querySelectorAll(".steps-toggle").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const panel = document.getElementById(btn.dataset.target);
-          const icon = btn.querySelector(".toggle-icon");
-          if (panel) {
-            panel.classList.toggle("open");
-            if (icon) icon.textContent = panel.classList.contains("open") ? "▼" : "▶";
-          }
-        });
-      });
-    }
-
-    async function sendQuestion() {
-      const question = qEl.value.trim();
-      if (!question) return setToast("질문을 입력하세요.", "error");
-      if (askBtn.disabled) return;
-
-      qEl.value = "";
-      askBtn.disabled = true;
-      appendUserMessage(question);
-      const indicator = appendThinkingIndicator();
-
-      try {
-        const res = await api("/api/chat", {
-          method: "POST",
-          body: { question, history: conversationHistory },
-        });
-        removeThinkingIndicator();
-
-        conversationHistory.push({ role: "user", content: question });
-        conversationHistory.push({ role: "assistant", content: res.answer });
-        // Keep history to last MAX_HISTORY_MESSAGES messages to avoid token overflow
-        if (conversationHistory.length > MAX_HISTORY_MESSAGES) conversationHistory = conversationHistory.slice(-MAX_HISTORY_MESSAGES);
-
-        appendAssistantMessage(res.answer, res.steps, res.citations);
-      } catch (e) {
-        removeThinkingIndicator();
-        setToast(e.message, "error");
-        appendAssistantMessage("오류가 발생했습니다: " + e.message, [], []);
-      } finally {
-        askBtn.disabled = false;
-        qEl.focus();
-      }
-    }
-
-    askBtn.addEventListener("click", sendQuestion);
-    qEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+document.getElementById("broker-save")?.addEventListener("click", async () => {
+  try {
+    await api("/api/broker/settings", {
+      method: "POST",
+      body: {
+        broker:     document.getElementById("broker-type").value,
+        app_key:    document.getElementById("broker-app-key").value,
+        app_secret: document.getElementById("broker-app-secret").value,
+        account_no: document.getElementById("broker-account").value,
+        paper:      document.getElementById("broker-paper").checked,
+      },
     });
+    setToast("증권사 API 설정이 저장되었습니다.", "ok");
+    loadSettings();
+  } catch (e) { setToast(e.message, "error"); }
+});
 
-    document.getElementById("clearChatBtn").addEventListener("click", () => {
-      conversationHistory = [];
-      chatMessages.innerHTML = "";
-      setToast("대화가 초기화되었습니다.", "ok");
-    });
+document.getElementById("broker-test")?.addEventListener("click", async () => {
+  const el = document.getElementById("broker-status");
+  el.textContent = "연결 테스트 중...";
+  try {
+    const data = await api("/api/broker/price?symbol=005930.KS");
+    el.textContent = `✅ 연결 성공 – 삼성전자 현재가: ${fmt(data.current)}원`;
+    setToast("연결 성공", "ok");
+  } catch (e) {
+    el.textContent = `❌ 연결 실패: ${e.message}`;
+    setToast(e.message, "error");
+  }
+});
 
-    // Ingest
-    const ingestLog = document.getElementById("ingestLog");
-    document.getElementById("ingestBtn").addEventListener("click", async () => {
-      ingestLog.textContent = "인덱싱 시작...";
-      try {
-        const res = await api("/api/ingest/demo", { method: "POST" });
-        ingestLog.textContent = res.log.join("\n");
-        setToast("인덱싱 완료", "ok");
-      } catch (e) {
-        ingestLog.textContent += "\n[ERROR] " + e.message;
-        setToast(e.message, "error");
-      }
-    });
-    document.getElementById("resetBtn").addEventListener("click", async () => {
-      ingestLog.textContent = "DB 초기화...";
-      try {
-        const res = await api("/api/admin/reset", { method: "POST" });
-        ingestLog.textContent = res.message;
-        setToast("초기화 완료", "ok");
-      } catch (e) {
-        ingestLog.textContent += "\n[ERROR] " + e.message;
-        setToast(e.message, "error");
-      }
-    });
+// ── 미국주식 (Alpaca Mockup) ─────────────────────────────────────
+const US_STOCKS = [
+  { symbol:"AAPL",  name:"Apple" },
+  { symbol:"MSFT",  name:"Microsoft" },
+  { symbol:"GOOGL", name:"Alphabet" },
+  { symbol:"AMZN",  name:"Amazon" },
+  { symbol:"NVDA",  name:"NVIDIA" },
+  { symbol:"TSLA",  name:"Tesla" },
+  { symbol:"META",  name:"Meta" },
+  { symbol:"NFLX",  name:"Netflix" },
+];
 
-    // Library
-    const libRes = document.getElementById("libRes");
-    document.getElementById("libBtn").addEventListener("click", async () => {
-      const q = document.getElementById("libQ").value.trim();
-      libRes.innerHTML = "";
-      if (!q) return;
-      try {
-        const res = await api("/api/library/search?q=" + encodeURIComponent(q));
-        for (const item of res.items) {
-          const div = document.createElement("div");
-          div.className = "rounded-2xl border border-white/10 bg-black/20 p-4";
-          div.innerHTML = `
-            <div class="text-xs text-slate-400">${escHtml(item.docId ? (item.docId + "@v" + (item.docVersion||1) + (item.effectiveDate ? (" • 기준일 " + item.effectiveDate) : "")) : item.source)}</div>
-            <div class="mt-2 text-sm whitespace-pre-wrap leading-relaxed">${escHtml(item.text)}</div>
-          `;
-          libRes.appendChild(div);
-        }
-      } catch (e) {
-        setToast(e.message, "error");
-      }
-    });
+function mockUsPrice(symbol) {
+  const base = { AAPL:189.3,MSFT:415.2,GOOGL:172.8,AMZN:192.4,NVDA:875.6,TSLA:248.3,META:512.7,NFLX:638.4 };
+  const p = base[symbol] || 100;
+  const chg = (Math.random()-0.45)*3;
+  return { symbol, price: +(p*(1+chg/100)).toFixed(2), change_pct: +chg.toFixed(2) };
+}
 
-    boot();
-  </script>
+function mockUsMarket() {
+  return [
+    { name:"S&P 500",    price:+(5280+Math.random()*60-30).toFixed(1),  change_pct:+(Math.random()*1.4-0.5).toFixed(2) },
+    { name:"NASDAQ",     price:+(18500+Math.random()*200-100).toFixed(1), change_pct:+(Math.random()*1.8-0.6).toFixed(2) },
+    { name:"DOW",        price:+(39800+Math.random()*300-150).toFixed(1), change_pct:+(Math.random()*1.0-0.4).toFixed(2) },
+    { name:"USD/KRW",    price:+(1380+Math.random()*20-10).toFixed(1),    change_pct:+(Math.random()*0.6-0.3).toFixed(2) },
+  ];
+}
+
+let usChartInstance = null;
+let usOrders = JSON.parse(sessionStorage.getItem("us_orders") || "[]");
+
+function loadUsDashboard() {
+  const marketEl = document.getElementById("us-market-cards");
+  const sigEl    = document.getElementById("us-signal-cards");
+  const indices  = mockUsMarket();
+  marketEl.innerHTML = indices.map(idx => {
+    const cls = idx.change_pct >= 0 ? "var(--green)" : "var(--red)";
+    const sign = idx.change_pct >= 0 ? "+" : "";
+    return `<div class="card text-center" style="padding:14px;">
+      <div class="text-xs" style="color:var(--text-dim);">${escHtml(idx.name)}</div>
+      <div class="text-xl font-bold mt-1">${fmt(idx.price)}</div>
+      <div class="text-xs font-semibold mt-1" style="color:${cls};">${sign}${idx.change_pct}%</div>
+    </div>`;
+  }).join("");
+
+  sigEl.innerHTML = US_STOCKS.map(s => {
+    const d = mockUsPrice(s.symbol);
+    const score = Math.floor(Math.random()*10-5);
+    const action = score >= 3 ? "BUY" : score <= -3 ? "SELL" : "HOLD";
+    const acColor = action==="BUY" ? "var(--green)" : action==="SELL" ? "var(--red)" : "var(--text-dim)";
+    const sign = d.change_pct >= 0 ? "+" : "";
+    const pctColor = d.change_pct >= 0 ? "var(--green)" : "var(--red)";
+    return `<div class="card" style="padding:12px;">
+      <div class="font-bold text-sm">${escHtml(s.symbol)}</div>
+      <div class="text-xs" style="color:var(--text-dim);">${escHtml(s.name)}</div>
+      <div class="font-semibold mt-2">$${fmt(d.price,2)}</div>
+      <div class="text-xs mt-1" style="color:${pctColor};">${sign}${d.change_pct}%</div>
+      <div class="text-xs font-bold mt-2" style="color:${acColor};">${action}</div>
+    </div>`;
+  }).join("");
+}
+
+function loadUsChart() {
+  const symbol = document.getElementById("us-symbol").value.trim().toUpperCase() || "AAPL";
+  const container = document.getElementById("us-chart-container");
+  const infoEl    = document.getElementById("us-stock-info");
+  const d = mockUsPrice(symbol);
+  const sign = d.change_pct >= 0 ? "+" : "";
+  const pctColor = d.change_pct >= 0 ? "var(--green)" : "var(--red)";
+  infoEl.innerHTML = `<span class="font-semibold">${escHtml(symbol)}</span>
+    <span class="ml-3">$${fmt(d.price,2)}</span>
+    <span class="ml-2 font-semibold" style="color:${pctColor};">${sign}${d.change_pct}% (Mockup)</span>`;
+
+  if (typeof LightweightCharts === "undefined") return;
+  if (usChartInstance) { usChartInstance.remove(); usChartInstance = null; }
+  const chart = LightweightCharts.createChart(container, {
+    layout: { background: { color: "#ffffff" }, textColor: "#434651" },
+    grid: { vertLines: { color: "#e0e3eb" }, horzLines: { color: "#e0e3eb" } },
+    width: container.clientWidth, height: 400,
+  });
+  usChartInstance = chart;
+  const series = chart.addCandlestickSeries({ upColor:"#10b981",downColor:"#f43f5e",borderUpColor:"#10b981",borderDownColor:"#f43f5e",wickUpColor:"#10b981",wickDownColor:"#f43f5e" });
+  // Generate mock OHLCV
+  const days = 250;
+  let price = d.price * (1 - d.change_pct/100 * days/100);
+  const data = [];
+  for (let i = days; i >= 0; i--) {
+    const date = new Date(); date.setDate(date.getDate()-i);
+    if (date.getDay()===0 || date.getDay()===6) continue;
+    const open = price;
+    const chg  = (Math.random()-0.48)*price*0.025;
+    const close = +(open+chg).toFixed(2);
+    const high  = +(Math.max(open,close)*(1+Math.random()*0.01)).toFixed(2);
+    const low   = +(Math.min(open,close)*(1-Math.random()*0.01)).toFixed(2);
+    data.push({ time: date.toISOString().slice(0,10), open: +open.toFixed(2), high, low, close });
+    price = close;
+  }
+  series.setData(data);
+  chart.timeScale().fitContent();
+}
+
+function renderUsOrders() {
+  const el = document.getElementById("us-order-history");
+  if (!usOrders.length) { el.innerHTML = "<div style='color:var(--text-mute);'>주문 내역 없음</div>"; return; }
+  el.innerHTML = [...usOrders].reverse().slice(0,20).map(o => `
+    <div class="flex items-center gap-3 rounded-lg px-3 py-2" style="background:var(--surf2);border:1px solid var(--border);font-size:12px;">
+      <span class="${o.side==="buy"?"badge-buy":"badge-sell"}">${o.side==="buy"?"BUY":"SELL"}</span>
+      <span class="font-semibold">${escHtml(o.symbol)}</span>
+      <span>${o.qty}주</span>
+      <span style="color:var(--text-dim);">${o.type==="market"?"시장가":"$"+o.price}</span>
+      <span class="ml-auto" style="color:var(--text-mute);">${o.time}</span>
+    </div>
+  `).join("");
+}
+
+function loadUsPortfolio() {
+  const acEl = document.getElementById("us-account-summary");
+  const pfEl = document.getElementById("us-portfolio-table");
+  const cash = 50000 + Math.random()*5000;
+  const positions = US_STOCKS.slice(0,4).map(s => {
+    const d = mockUsPrice(s.symbol);
+    const qty = Math.floor(Math.random()*20)+1;
+    const avgCost = +(d.price*(0.85+Math.random()*0.2)).toFixed(2);
+    const mktVal  = +(d.price*qty).toFixed(2);
+    const pnl     = +(mktVal - avgCost*qty).toFixed(2);
+    const pnlPct  = +((pnl/(avgCost*qty))*100).toFixed(2);
+    return { ...s, qty, avgCost, price:d.price, mktVal, pnl, pnlPct };
+  });
+  const totalMkt = positions.reduce((a,p)=>a+p.mktVal,0);
+  acEl.innerHTML = [
+    { label:"현금 (USD)",    value:`$${fmt(cash,2)}` },
+    { label:"주식 평가 합계", value:`$${fmt(totalMkt,2)}` },
+    { label:"총 자산",       value:`$${fmt(cash+totalMkt,2)}` },
+  ].map(c=>`<div class="card text-center" style="padding:14px;">
+    <div class="text-xs" style="color:var(--text-dim);">${c.label}</div>
+    <div class="text-lg font-bold mt-1">${c.value}</div>
+  </div>`).join("");
+  pfEl.innerHTML = `<table>
+    <thead><tr><th>종목</th><th>수량</th><th>평균단가</th><th>현재가</th><th>평가금액</th><th>손익</th></tr></thead>
+    <tbody>${positions.map(p=>{
+      const pnlColor = p.pnl>=0?"var(--green)":"var(--red)";
+      const sign = p.pnl>=0?"+":"";
+      return `<tr>
+        <td><div class="font-semibold">${escHtml(p.symbol)}</div><div style="color:var(--text-mute);font-size:11px;">${escHtml(p.name)}</div></td>
+        <td>${p.qty}</td>
+        <td>$${fmt(p.avgCost,2)}</td>
+        <td>$${fmt(p.price,2)}</td>
+        <td>$${fmt(p.mktVal,2)}</td>
+        <td style="color:${pnlColor};">${sign}$${fmt(Math.abs(p.pnl),2)}<div style="font-size:11px;">${sign}${p.pnlPct}%</div></td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table>`;
+}
+
+function placeUsOrder(side) {
+  const symbol = document.getElementById("us-ord-symbol").value.trim().toUpperCase();
+  const qty    = parseInt(document.getElementById("us-ord-qty").value);
+  const type   = document.getElementById("us-ord-type").value;
+  const price  = document.getElementById("us-ord-price").value;
+  if (!symbol || !qty) return setToast("종목코드와 수량을 입력하세요.", "error");
+  usOrders.push({ symbol, qty, side, type, price: price||"", time: new Date().toLocaleString("ko-KR") });
+  sessionStorage.setItem("us_orders", JSON.stringify(usOrders));
+  setToast(`${side==="buy"?"매수":"매도"} 주문 완료 (Mockup): ${symbol} ${qty}주`, "ok");
+  renderUsOrders();
+}
+
+document.getElementById("us-ord-buy")?.addEventListener("click",  ()=>placeUsOrder("buy"));
+document.getElementById("us-ord-sell")?.addEventListener("click", ()=>placeUsOrder("sell"));
+document.getElementById("us-chart-load")?.addEventListener("click", loadUsChart);
+document.getElementById("us-refresh")?.addEventListener("click",    loadUsDashboard);
+document.getElementById("us-pf-refresh")?.addEventListener("click", loadUsPortfolio);
+document.getElementById("alpaca-save")?.addEventListener("click", ()=>{
+  const key    = document.getElementById("alpaca-key").value.trim();
+  const secret = document.getElementById("alpaca-secret").value.trim();
+  const paper  = document.getElementById("alpaca-paper").checked;
+  const statusEl = document.getElementById("alpaca-status");
+  if (!key || !secret) {
+    statusEl.textContent = "⚠️ API 키가 없어 Mockup 모드로 동작합니다.";
+    statusEl.style.color = "var(--text-mute)";
+  } else {
+    statusEl.textContent = `✅ 저장됨 – ${paper?"Paper Trading":"Live"} 모드 (Mockup 적용중)`;
+    statusEl.style.color = "var(--green)";
+  }
+  setToast("Alpaca 설정 저장 완료", "ok");
+});
+
+// ── 시스템 대시보드 ───────────────────────────────────────────────
+async function loadSystemDashboard() {
+  const hostEl  = document.getElementById("sys-host");
+  const svcEl   = document.getElementById("sys-services");
+  const contEl  = document.getElementById("sys-containers");
+  if (!hostEl) return;
+  hostEl.innerHTML = "<div class='col-span-3 text-slate-400 text-sm'>조회 중...</div>";
+  try {
+    const d = await api("/api/system/status");
+
+    // 호스트 카드
+    const h = d.host || {};
+    hostEl.innerHTML = [
+      { label: "CPU", value: h.cpu_pct != null ? `${h.cpu_pct}%` : "N/A", sub: "" },
+      { label: "메모리", value: h.mem_pct != null ? `${h.mem_pct}%` : "N/A",
+        sub: `${h.mem_used_gb ?? "-"}GB / ${h.mem_total_gb ?? "-"}GB` },
+      { label: "디스크", value: `${d.disk?.pct ?? "-"}%`,
+        sub: `${d.disk?.used_gb ?? "-"}GB / ${d.disk?.total_gb ?? "-"}GB` },
+    ].map(c => `
+      <div class="card text-center">
+        <div class="text-xs text-slate-400">${c.label}</div>
+        <div class="text-2xl font-bold text-indigo-300 mt-1">${c.value}</div>
+        <div class="text-xs text-slate-500">${c.sub}</div>
+      </div>
+    `).join("");
+
+    // 서비스 상태
+    svcEl.innerHTML = (d.services || []).map(s => `
+      <div class="card flex items-center gap-3">
+        <span class="text-xl">${s.ok ? "🟢" : "🔴"}</span>
+        <div>
+          <div class="font-medium text-sm">${escHtml(s.name)}</div>
+          <div class="text-xs text-slate-400">${s.ok ? `응답 ${s.ms}ms` : "연결 실패"}</div>
+          <div class="text-xs text-slate-500 font-mono truncate max-w-[140px]">${escHtml(s.url)}</div>
+        </div>
+      </div>
+    `).join("");
+
+    // Docker 컨테이너
+    if (!d.containers?.length) {
+      contEl.innerHTML = "<div class='text-slate-400 text-sm'>Docker 정보를 가져올 수 없습니다 (CLI 미접근).</div>";
+    } else {
+      contEl.innerHTML = d.containers.map(c => `
+        <div class="card flex items-center gap-3">
+          <span class="text-lg">${c.up ? "🟩" : "🟥"}</span>
+          <div class="flex-1 grid grid-cols-4 gap-2 text-sm">
+            <div><span class="text-xs text-slate-500">이름</span><br>${escHtml(c.name)}</div>
+            <div><span class="text-xs text-slate-500">이미지</span><br><span class="font-mono text-xs">${escHtml(c.image)}</span></div>
+            <div><span class="text-xs text-slate-500">상태</span><br>${escHtml(c.status)}</div>
+            <div><span class="text-xs text-slate-500">포트</span><br><span class="font-mono text-xs">${escHtml(c.ports || "-")}</span></div>
+          </div>
+        </div>
+      `).join("");
+    }
+  } catch (e) {
+    hostEl.innerHTML = `<div class='col-span-3 text-red-400 text-sm'>${escHtml(e.message)}</div>`;
+  }
+}
+
+document.getElementById("sys-refresh")?.addEventListener("click", loadSystemDashboard);
+
+// ── 햄버거 메뉴 ───────────────────────────────────────────────────
+document.getElementById("hamburger-btn")?.addEventListener("click", () => {
+  const menu = document.getElementById("mobile-menu");
+  menu.classList.toggle("hidden");
+});
+
+// ── Footer 연도 ───────────────────────────────────────────────────
+const footerYear = document.getElementById("footer-year");
+if (footerYear) footerYear.textContent = new Date().getFullYear();
+
+boot();
+</script>
 </body>
 </html>

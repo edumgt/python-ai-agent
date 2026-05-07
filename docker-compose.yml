@@ -3,14 +3,14 @@ services:
   # MongoDB – 사용자/인증 데이터
   # ─────────────────────────────
   mongo:
-    image: 192.168.56.32/library/mongo:8.2.5
+    image: mongo:8.2.5
     container_name: mongo
     ports:
       - "27017:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: law_user
-      MONGO_INITDB_ROOT_PASSWORD: law_pass
-      MONGO_INITDB_DATABASE: law_rag
+      MONGO_INITDB_ROOT_USERNAME: fin_user
+      MONGO_INITDB_ROOT_PASSWORD: fin_pass
+      MONGO_INITDB_DATABASE: fin_ai
     volumes:
       - mongo_data:/data/db
     restart: unless-stopped
@@ -19,7 +19,7 @@ services:
   # Redis – 세션 스토어
   # ─────────────────────────────
   redis:
-    image: 192.168.56.32/library/redis:8.6.1
+    image: redis:8.6.1
     container_name: redis
     ports:
       - "6379:6379"
@@ -35,8 +35,9 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     volumes:
-      # Windows Ollama 모델 폴더 직접 마운트 → 재다운로드 불필요
       - /mnt/c/Users/1/.ollama:/root/.ollama
+    ports:
+      - "11434:11434"
     restart: unless-stopped
 
   # ─────────────────────────────
@@ -61,7 +62,6 @@ services:
     depends_on:
       ollama:
         condition: service_started
-    env_file: .env
     volumes:
       - /mnt/c/Users/1/.ollama:/root/.ollama
     entrypoint: >
@@ -75,24 +75,24 @@ services:
     restart: "no"
 
   # ─────────────────────────────
-  # App – Node.js RAG API server
+  # App – Python/FastAPI server
   # ─────────────────────────────
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: law-rag-app
+    container_name: fin-ai-app
     ports:
       - "8000:8000"
     env_file: .env
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - QDRANT_URL=http://qdrant:6333
-      - VECTOR_STORE=${VECTOR_STORE:-sqlite}
-      - MONGO_URI=mongodb://root:root-password@mongo:27017/law_rag?authSource=admin
+      - MONGO_URI=mongodb://fin_user:fin_pass@mongo:27017/fin_ai?authSource=admin
       - REDIS_URL=redis://redis:6379
     volumes:
       - app_data:/app/data
+      - ./data:/app/data/csv:ro
     depends_on:
       - mongo
       - redis
@@ -102,29 +102,28 @@ services:
 
   # ─────────────────────────────
   # Ingest job (one-shot)
-  # Run manually: docker compose run --rm ingest
+  # Run: docker compose run --rm ingest
   # ─────────────────────────────
   ingest:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: law-rag-ingest
+    container_name: fin-ai-ingest
     env_file: .env
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - QDRANT_URL=http://qdrant:6333
-      - VECTOR_STORE=${VECTOR_STORE:-sqlite}
-      - MONGO_URI=mongodb://root:root-password@mongo:27017/law_rag?authSource=admin
+      - MONGO_URI=mongodb://fin_user:fin_pass@mongo:27017/fin_ai?authSource=admin
       - REDIS_URL=redis://redis:6379
     volumes:
       - app_data:/app/data
-      - ./Sample:/app/Sample:ro
+      - ./data:/app/data/csv:ro
     depends_on:
       - mongo
       - redis
       - ollama
       - qdrant
-    entrypoint: ["node", "dist/src/cli/ingest_sample.js"]
+    entrypoint: ["python", "-m", "app.services.financial_ingest"]
     restart: "no"
 
 volumes:
