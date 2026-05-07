@@ -3,7 +3,6 @@ import httpx
 import re
 from datetime import datetime, timezone
 from html.parser import HTMLParser
-import aiosqlite
 from app.config import settings
 from app.lib.ollama import OllamaClient
 
@@ -109,7 +108,7 @@ async def _store_qdrant(chunks: list[str], meta: dict, ollama: OllamaClient) -> 
 
 async def crawl_github_docs(
     owner: str, repo: str, branch: str, path: str,
-    db: aiosqlite.Connection, ollama: OllamaClient, log: list[str],
+    mdb, ollama: OllamaClient, log: list[str],
 ) -> int:
     """GitHub 레포의 markdown docs를 크롤링하여 Qdrant에 저장."""
     total = 0
@@ -154,14 +153,13 @@ async def crawl_github_docs(
             meta = {"url": url, "title": f["name"], "source": f"github:{owner}/{repo}"}
 
             stored = await _store_qdrant(chunks, meta, ollama)
-            # Also save to SQLite as fallback
-            await db.execute(
-                "INSERT OR REPLACE INTO crawled_docs (url, title, content, source, crawled_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (url, f["name"], content[:5000], f"github:{owner}/{repo}",
-                 datetime.now(timezone.utc).isoformat()),
+            await mdb.crawled_docs.update_one(
+                {"url": url},
+                {"$set": {"title": f["name"], "content": content[:5000],
+                           "source": f"github:{owner}/{repo}",
+                           "crawled_at": datetime.now(timezone.utc).isoformat()}},
+                upsert=True,
             )
-            await db.commit()
             log.append(f"  ✓ {f['name']} → {len(chunks)}청크 (Qdrant {stored}건)")
             total += len(chunks)
 
@@ -169,7 +167,7 @@ async def crawl_github_docs(
 
 
 async def crawl_url(
-    url: str, db: aiosqlite.Connection, ollama: OllamaClient, log: list[str],
+    url: str, mdb, ollama: OllamaClient, log: list[str],
 ) -> int:
     """임의 URL 크롤링."""
     async with httpx.AsyncClient(
@@ -196,18 +194,17 @@ async def crawl_url(
 
     meta = {"url": url, "title": title_text, "source": "web"}
     stored = await _store_qdrant(chunks, meta, ollama)
-
-    await db.execute(
-        "INSERT OR REPLACE INTO crawled_docs (url, title, content, source, crawled_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (url, title_text, text[:5000], "web", datetime.now(timezone.utc).isoformat()),
+    await mdb.crawled_docs.update_one(
+        {"url": url},
+        {"$set": {"title": title_text, "content": text[:5000],
+                   "source": "web", "crawled_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
     )
-    await db.commit()
     log.append(f"✓ {title_text[:50]} → {len(chunks)}청크 (Qdrant {stored}건)")
     return len(chunks)
 
 
-async def run_auto_crawl(db: aiosqlite.Connection, ollama: OllamaClient, log: list[str]) -> dict:
+async def run_auto_crawl(mdb, ollama: OllamaClient, log: list[str]) -> dict:
     """자동 크롤링 실행."""
     total_chunks = 0
     for target in CRAWL_TARGETS:
@@ -215,7 +212,7 @@ async def run_auto_crawl(db: aiosqlite.Connection, ollama: OllamaClient, log: li
         if target["type"] == "github_docs":
             n = await crawl_github_docs(
                 target["owner"], target["repo"], target["branch"], target["path"],
-                db, ollama, log,
+                mdb, ollama, log,
             )
             total_chunks += n
 

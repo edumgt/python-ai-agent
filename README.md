@@ -58,6 +58,75 @@ MongoDB 8  ·  Redis 8  ·  Ollama  ·  Qdrant latest
 
 ---
 
+## 퀀트 매매 ML 파이프라인
+
+```mermaid
+flowchart TD
+    A([원시 시장 데이터\nOHLCV · Yahoo Finance]) --> B
+
+    subgraph PRE["① 전처리 (Preprocessing)"]
+        B[결측치 처리\nffill / bfill] --> C[이상치 제거\n종가 0 이하 필터] --> D[DatetimeIndex 정렬]
+    end
+
+    D --> E
+
+    subgraph FE["② 피처 엔지니어링 (Feature Engineering)"]
+        E[수익률\nret_1 / ret_5 / ret_20] --> F[이동평균 비율\nMA5 / MA20 ratio]
+        F --> G[RSI 14]
+        G --> H[MACD 12/26/9]
+        H --> I[볼린저밴드\nbb_width · bb_pos]
+        I --> J[거래량 비율 · ATR]
+    end
+
+    J --> K{모델 선택}
+
+    subgraph ML["③-A ML 모델"]
+        K -->|lgb| L[LightGBM\n방향성 3-class 분류\n매수 / 관망 / 매도]
+    end
+
+    subgraph DL["③-B DL 모델"]
+        K -->|mlp| M[MLP Neural Net\n64→32 ReLU\nsklearn MLPClassifier]
+        K -->|lstm| N[LSTM · Transformer\nPyTorch 확장 옵션]
+    end
+
+    subgraph RULE["③-C Fallback"]
+        K -->|rule| O[규칙 기반\nRSI+MACD+BB 점수합산]
+    end
+
+    L --> P([시그널 생성\n+1 매수 / 0 관망 / -1 매도])
+    M --> P
+    N --> P
+    O --> P
+
+    P --> Q
+
+    subgraph BT["④ 백테스트 (Backtest)"]
+        Q[누적 수익률] --> R[샤프지수\n연간화 √252]
+        R --> S[MDD 최대낙폭]
+        S --> T[승률 · 매매 횟수]
+    end
+
+    T --> U{시그널 검증}
+    U -->|통과| V
+    U -->|기각| FE
+
+    subgraph EXEC["⑤ 실시간 실행 (Alpaca API)"]
+        V[POST /v2/orders\nPaper Trading] --> W[포트폴리오 업데이트\nMongoDB orders · portfolio]
+    end
+
+    W --> X([10분 Agentic Loop\nauto_trade.py]) --> A
+
+    style PRE fill:#e8f4fd,stroke:#2962ff
+    style FE  fill:#e8f5e9,stroke:#089981
+    style ML  fill:#fff3e0,stroke:#f57c00
+    style DL  fill:#fce4ec,stroke:#e91e63
+    style RULE fill:#f3e5f5,stroke:#7b1fa2
+    style BT  fill:#e0f2f1,stroke:#00695c
+    style EXEC fill:#e8eaf6,stroke:#3949ab
+```
+
+---
+
 ## 아키텍처
 
 ```

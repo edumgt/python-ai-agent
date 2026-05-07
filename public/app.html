@@ -6,7 +6,8 @@
   <title>금융 AI Agent</title>
   <link rel="icon" href="/favicon.ico" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.49.2/dist/apexcharts.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <style>
     /* ── Design Tokens (TradingView Light) ── */
@@ -32,7 +33,7 @@
 
     /* ── Reset / Base ── */
     *, *::before, *::after { box-sizing: border-box; }
-    body { background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.55; font-family: -apple-system, 'Trebuchet MS', sans-serif; }
+    body { background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.55; font-family: 'Pretendard', -apple-system, 'Apple SD Gothic Neo', sans-serif; }
 
     /* ── GNB ── */
     .gnb-item {
@@ -1447,31 +1448,26 @@ async function loadStockChart() {
       <span class="ml-3">${fmt(price)}</span>
       ${chg != null ? `<span class="ml-2 ${chgClass}">${chg >= 0 ? "+" : ""}${chg}%</span>` : ""}`;
 
-    // Chart
+    // Chart — ApexCharts 캔들스틱
     container.innerHTML = "";
-    if (typeof LightweightCharts === "undefined") {
-      container.textContent = "차트 라이브러리 로드 중...";
-      return;
-    }
-    if (chartInstance) { chartInstance.remove(); chartInstance = null; }
-    const chart = LightweightCharts.createChart(container, {
-      layout: { background: { color: "#ffffff" }, textColor: "#434651" },
-      grid: { vertLines: { color: "#e0e3eb" }, horzLines: { color: "#e0e3eb" } },
-      width: container.clientWidth,
-      height: 380,
-    });
-    chartInstance = chart;
-
-    const candleSeries = chart.addCandlestickSeries({
-      upColor: "#10b981", downColor: "#ef4444",
-      borderUpColor: "#10b981", borderDownColor: "#ef4444",
-      wickUpColor: "#10b981", wickDownColor: "#ef4444",
-    });
-    const data = candles.candles
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    const ohlcv = candles.candles
       .filter(c => c.open && c.high && c.low && c.close)
-      .map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
-    candleSeries.setData(data);
-    chart.timeScale().fitContent();
+      .map(c => ({ x: new Date(c.time * 1000), y: [c.open, c.high, c.low, c.close] }));
+    chartInstance = new ApexCharts(container, {
+      chart: { type: "candlestick", height: 380, background: "#fff", toolbar: { show: true },
+               animations: { enabled: false }, fontFamily: "Pretendard, sans-serif" },
+      series: [{ name: "OHLC", data: ohlcv }],
+      xaxis: { type: "datetime", labels: { style: { colors: "#434651" } } },
+      yaxis: { tooltip: { enabled: true }, labels: { style: { colors: "#434651" },
+               formatter: v => v?.toLocaleString() } },
+      plotOptions: { candlestick: { colors: { upward: "#10b981", downward: "#ef4444" },
+                     wick: { useFillColor: true } } },
+      grid: { borderColor: "#e0e3eb" },
+      theme: { mode: "light" },
+      tooltip: { theme: "light" },
+    });
+    chartInstance.render();
   } catch (e) {
     infoEl.textContent = "오류: " + e.message;
   }
@@ -1644,33 +1640,32 @@ async function loadQuantChart() {
     const data = await api(`/api/stocks/quant/indicators?symbol=${encodeURIComponent(symbol)}&period=2y`);
     if (data.error) { container.textContent = data.error; return; }
 
-    if (typeof LightweightCharts === "undefined") return;
-    if (quantChartInstance) { quantChartInstance.remove(); quantChartInstance = null; }
-
-    const chart = LightweightCharts.createChart(container, {
-      layout: { background: { color: "#ffffff" }, textColor: "#434651" },
-      grid: { vertLines: { color: "#e0e3eb" }, horzLines: { color: "#e0e3eb" } },
-      width: container.clientWidth,
-      height: 380,
-    });
-    quantChartInstance = chart;
-
-    const lineSeries = chart.addLineSeries({ color: "#6366f1", lineWidth: 2 });
-    const ma20Series = chart.addLineSeries({ color: "#f59e0b", lineWidth: 1 });
-    const ma60Series = chart.addLineSeries({ color: "#10b981", lineWidth: 1 });
-    const bbUpperSeries = chart.addLineSeries({ color: "#6366f1", lineWidth: 1, lineStyle: 2 });
-    const bbLowerSeries = chart.addLineSeries({ color: "#6366f1", lineWidth: 1, lineStyle: 2 });
+    if (quantChartInstance) { quantChartInstance.destroy(); quantChartInstance = null; }
 
     const times = data.times || [];
-    const mapSeries = (arr) => arr.map((v, i) => v != null ? { time: times[i], value: v } : null).filter(Boolean);
+    const toMs = t => new Date(t * 1000).getTime();
+    const mapS = (arr) => arr.map((v, i) => [toMs(times[i]), v != null ? +v.toFixed(2) : null]).filter(p => p[1] != null);
 
-    lineSeries.setData(mapSeries(data.closes));
-    if (data.ma20) ma20Series.setData(mapSeries(data.ma20));
-    if (data.ma60) ma60Series.setData(mapSeries(data.ma60));
-    if (data.bb_upper) bbUpperSeries.setData(mapSeries(data.bb_upper));
-    if (data.bb_lower) bbLowerSeries.setData(mapSeries(data.bb_lower));
-
-    chart.timeScale().fitContent();
+    quantChartInstance = new ApexCharts(container, {
+      chart: { type: "line", height: 380, background: "#fff", toolbar: { show: true },
+               animations: { enabled: false }, fontFamily: "Pretendard, sans-serif",
+               zoom: { enabled: true } },
+      series: [
+        { name: "종가",   data: mapS(data.closes)   },
+        { name: "MA20",   data: mapS(data.ma20 || []) },
+        { name: "MA60",   data: mapS(data.ma60 || []) },
+        { name: "BB 상단", data: mapS(data.bb_upper || []) },
+        { name: "BB 하단", data: mapS(data.bb_lower || []) },
+      ],
+      colors: ["#6366f1", "#f59e0b", "#10b981", "#94a3b8", "#94a3b8"],
+      stroke: { width: [2, 1.5, 1.5, 1, 1], dashArray: [0, 0, 0, 4, 4], curve: "smooth" },
+      xaxis: { type: "datetime", labels: { style: { colors: "#434651" } } },
+      yaxis: { labels: { style: { colors: "#434651" }, formatter: v => v?.toLocaleString() } },
+      grid: { borderColor: "#e0e3eb" },
+      legend: { show: true, position: "top" },
+      tooltip: { shared: true, x: { format: "yyyy-MM-dd" }, theme: "light" },
+    });
+    quantChartInstance.render();
   } catch (e) {
     container.textContent = "차트 오류: " + e.message;
   }
@@ -1858,32 +1853,36 @@ function loadUsChart() {
     <span class="ml-3">$${fmt(d.price,2)}</span>
     <span class="ml-2 font-semibold" style="color:${pctColor};">${sign}${d.change_pct}% (Mockup)</span>`;
 
-  if (typeof LightweightCharts === "undefined") return;
-  if (usChartInstance) { usChartInstance.remove(); usChartInstance = null; }
-  const chart = LightweightCharts.createChart(container, {
-    layout: { background: { color: "#ffffff" }, textColor: "#434651" },
-    grid: { vertLines: { color: "#e0e3eb" }, horzLines: { color: "#e0e3eb" } },
-    width: container.clientWidth, height: 400,
-  });
-  usChartInstance = chart;
-  const series = chart.addCandlestickSeries({ upColor:"#10b981",downColor:"#f43f5e",borderUpColor:"#10b981",borderDownColor:"#f43f5e",wickUpColor:"#10b981",wickDownColor:"#f43f5e" });
+  if (usChartInstance) { usChartInstance.destroy(); usChartInstance = null; }
   // Generate mock OHLCV
   const days = 250;
-  let price = d.price * (1 - d.change_pct/100 * days/100);
-  const data = [];
+  let price = d.price * (1 - d.change_pct / 100 * days / 100);
+  const ohlcv = [];
   for (let i = days; i >= 0; i--) {
-    const date = new Date(); date.setDate(date.getDate()-i);
-    if (date.getDay()===0 || date.getDay()===6) continue;
-    const open = price;
-    const chg  = (Math.random()-0.48)*price*0.025;
-    const close = +(open+chg).toFixed(2);
-    const high  = +(Math.max(open,close)*(1+Math.random()*0.01)).toFixed(2);
-    const low   = +(Math.min(open,close)*(1-Math.random()*0.01)).toFixed(2);
-    data.push({ time: date.toISOString().slice(0,10), open: +open.toFixed(2), high, low, close });
+    const date = new Date(); date.setDate(date.getDate() - i);
+    if (date.getDay() === 0 || date.getDay() === 6) continue;
+    const open  = price;
+    const chg   = (Math.random() - 0.48) * price * 0.025;
+    const close = +(open + chg).toFixed(2);
+    const high  = +(Math.max(open, close) * (1 + Math.random() * 0.01)).toFixed(2);
+    const low   = +(Math.min(open, close) * (1 - Math.random() * 0.01)).toFixed(2);
+    ohlcv.push({ x: new Date(date), y: [+open.toFixed(2), high, low, close] });
     price = close;
   }
-  series.setData(data);
-  chart.timeScale().fitContent();
+  usChartInstance = new ApexCharts(container, {
+    chart: { type: "candlestick", height: 400, background: "#fff", toolbar: { show: true },
+             animations: { enabled: false }, fontFamily: "Pretendard, sans-serif" },
+    series: [{ name: "OHLC", data: ohlcv }],
+    xaxis: { type: "datetime", labels: { style: { colors: "#434651" } } },
+    yaxis: { tooltip: { enabled: true }, labels: { style: { colors: "#434651" },
+             formatter: v => "$" + v?.toFixed(2) } },
+    plotOptions: { candlestick: { colors: { upward: "#10b981", downward: "#f43f5e" },
+                   wick: { useFillColor: true } } },
+    grid: { borderColor: "#e0e3eb" },
+    theme: { mode: "light" },
+    tooltip: { theme: "light" },
+  });
+  usChartInstance.render();
 }
 
 function renderUsOrders() {

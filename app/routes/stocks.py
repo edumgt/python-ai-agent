@@ -2,8 +2,7 @@ import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
-import aiosqlite
-from app.database.sqlite import get_db
+from app.database.mongo import get_mdb
 from app.lib.session import get_current_user
 from app.services.stock import (
     get_quote, get_candles, get_market_summary,
@@ -47,7 +46,8 @@ async def quant_stock_list():
     return {"stocks": QUANT_STOCKS}
 
 
-# ── 포트폴리오 ────────────────────────────────────────────────────────
+# ── 포트폴리오 (MongoDB) ──────────────────────────────────────────────
+
 class HoldingBody(BaseModel):
     symbol: str
     name: str
@@ -58,31 +58,33 @@ class HoldingBody(BaseModel):
 @router.get("/portfolio")
 async def get_portfolio(
     user=Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
+    mdb=Depends(get_mdb),
 ):
-    async with db.execute(
-        "SELECT * FROM portfolio WHERE mongo_user_id=? ORDER BY updated_at DESC",
-        (user["id"],)
-    ) as cur:
-        rows = await cur.fetchall()
-    return {"holdings": [dict(r) for r in rows]}
+    cursor = mdb.portfolio.find({"user_id": user["id"]}).sort("updated_at", -1)
+    holdings = []
+    async for doc in cursor:
+        doc.pop("_id", None)
+        holdings.append(doc)
+    return {"holdings": holdings}
 
 
 @router.post("/portfolio")
 async def upsert_holding(
     body: HoldingBody,
     user=Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
+    mdb=Depends(get_mdb),
 ):
     now = datetime.now(timezone.utc).isoformat()
-    await db.execute(
-        "INSERT INTO portfolio (mongo_user_id, symbol, name, quantity, avg_price, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?) "
-        "ON CONFLICT(mongo_user_id, symbol) DO UPDATE SET "
-        "quantity=excluded.quantity, avg_price=excluded.avg_price, updated_at=excluded.updated_at",
-        (user["id"], body.symbol, body.name, body.quantity, body.avg_price, now, now),
+    await mdb.portfolio.update_one(
+        {"user_id": user["id"], "symbol": body.symbol},
+        {"$set": {
+            "name":       body.name,
+            "quantity":   body.quantity,
+            "avg_price":  body.avg_price,
+            "updated_at": now,
+        }, "$setOnInsert": {"created_at": now}},
+        upsert=True,
     )
-    await db.commit()
     return {"ok": True}
 
 
@@ -90,192 +92,171 @@ async def upsert_holding(
 async def delete_holding(
     symbol: str,
     user=Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
+    mdb=Depends(get_mdb),
 ):
-    await db.execute(
-        "DELETE FROM portfolio WHERE mongo_user_id=? AND symbol=?",
-        (user["id"], symbol)
-    )
-    await db.commit()
+    await mdb.portfolio.delete_one({"user_id": user["id"], "symbol": symbol})
     return {"ok": True}
 
 
-# ── 수동 주문 ─────────────────────────────────────────────────────────
+# ── 수동 주문 (MongoDB) ───────────────────────────────────────────────
+
 class OrderBody(BaseModel):
     symbol: str
     name: str
-    order_type: str  # buy | sell
+    order_type: str   # buy | sell
     quantity: int
     price: float
     broker: str = "virtual"
+
+
+async def _apply_portfolio(mdb, user_id: str, symbol: str, name: str,
+                           order_type: str, quantity: int, price: float) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    if order_type == "buy":
+        existing = await mdb.portfolio.find_one({"user_id": user_id, "symbol": symbol})
+        if existing:
+            old_qty = existing["quantity"]
+            old_avg = existing["avg_price"]
+            new_qty = old_qty + quantity
+            new_avg = (old_avg * old_qty + price * quantity) / new_qty
+            await mdb.portfolio.update_one(
+                {"user_id": user_id, "symbol": symbol},
+                {"$set": {"quantity": new_qty, "avg_price": new_avg, "updated_at": now}},
+            )
+        else:
+            await mdb.portfolio.insert_one({
+                "user_id": user_id, "symbol": symbol, "name": name,
+                "quantity": quantity, "avg_price": price,
+                "created_at": now, "updated_at": now,
+            })
+    elif order_type == "sell":
+        existing = await mdb.portfolio.find_one({"user_id": user_id, "symbol": symbol})
+        if existing:
+            new_qty = existing["quantity"] - quantity
+            if new_qty <= 0:
+                await mdb.portfolio.delete_one({"user_id": user_id, "symbol": symbol})
+            else:
+                await mdb.portfolio.update_one(
+                    {"user_id": user_id, "symbol": symbol},
+                    {"$set": {"quantity": new_qty, "updated_at": now}},
+                )
 
 
 @router.post("/orders")
 async def place_order(
     body: OrderBody,
     user=Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
+    mdb=Depends(get_mdb),
 ):
     now = datetime.now(timezone.utc).isoformat()
-    # 키움/토스는 Mockup: 즉시 filled 처리
-    await db.execute(
-        "INSERT INTO orders (mongo_user_id, symbol, name, order_type, quantity, price, status, broker, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, 'filled', ?, ?)",
-        (user["id"], body.symbol, body.name, body.order_type,
-         body.quantity, body.price, body.broker, now),
-    )
-    # 포트폴리오 반영
-    if body.order_type == "buy":
-        existing = await (await db.execute(
-            "SELECT quantity, avg_price FROM portfolio WHERE mongo_user_id=? AND symbol=?",
-            (user["id"], body.symbol)
-        )).fetchone()
-        if existing:
-            new_qty = existing["quantity"] + body.quantity
-            new_avg = (existing["avg_price"] * existing["quantity"] + body.price * body.quantity) / new_qty
-            await db.execute(
-                "UPDATE portfolio SET quantity=?, avg_price=?, updated_at=? WHERE mongo_user_id=? AND symbol=?",
-                (new_qty, new_avg, now, user["id"], body.symbol),
-            )
-        else:
-            await db.execute(
-                "INSERT INTO portfolio (mongo_user_id, symbol, name, quantity, avg_price, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (user["id"], body.symbol, body.name, body.quantity, body.price, now, now),
-            )
-    elif body.order_type == "sell":
-        existing = await (await db.execute(
-            "SELECT quantity FROM portfolio WHERE mongo_user_id=? AND symbol=?",
-            (user["id"], body.symbol)
-        )).fetchone()
-        if existing:
-            new_qty = existing["quantity"] - body.quantity
-            if new_qty <= 0:
-                await db.execute(
-                    "DELETE FROM portfolio WHERE mongo_user_id=? AND symbol=?",
-                    (user["id"], body.symbol)
-                )
-            else:
-                await db.execute(
-                    "UPDATE portfolio SET quantity=?, updated_at=? WHERE mongo_user_id=? AND symbol=?",
-                    (new_qty, now, user["id"], body.symbol),
-                )
-    await db.commit()
+    await mdb.orders.insert_one({
+        "user_id":    user["id"],
+        "symbol":     body.symbol,
+        "name":       body.name,
+        "order_type": body.order_type,
+        "quantity":   body.quantity,
+        "price":      body.price,
+        "status":     "filled",
+        "broker":     body.broker,
+        "created_at": now,
+    })
+    await _apply_portfolio(mdb, user["id"], body.symbol, body.name,
+                           body.order_type, body.quantity, body.price)
     return {"ok": True, "status": "filled"}
 
 
 @router.get("/orders")
 async def order_history(
     user=Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
+    mdb=Depends(get_mdb),
 ):
-    async with db.execute(
-        "SELECT * FROM orders WHERE mongo_user_id=? ORDER BY created_at DESC LIMIT 200",
-        (user["id"],)
-    ) as cur:
-        rows = await cur.fetchall()
-    return {"orders": [dict(r) for r in rows]}
+    cursor = mdb.orders.find({"user_id": user["id"]}).sort("created_at", -1).limit(200)
+    orders = []
+    async for doc in cursor:
+        doc.pop("_id", None)
+        orders.append(doc)
+    return {"orders": orders}
 
 
-# ── 증권사 API 설정 ───────────────────────────────────────────────────
+# ── 증권사 API 설정 (MongoDB) ─────────────────────────────────────────
+
 class BrokerSettingsBody(BaseModel):
-    broker: str = "mock"          # kis | ebest | mock
+    broker: str = "mock"
     app_key: str = ""
     app_secret: str = ""
     account_no: str = ""
-    paper: bool = True            # 모의투자 여부 (KIS만 해당)
+    paper: bool = True
 
 
 @router.post("/broker/settings")
 async def save_broker_settings(
     body: BrokerSettingsBody,
     user=Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
+    mdb=Depends(get_mdb),
 ):
     now = datetime.now(timezone.utc).isoformat()
-    await db.execute(
-        "INSERT INTO broker_settings "
-        "(mongo_user_id, kiwoom_app_key, kiwoom_secret, toss_app_key, toss_secret, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?) "
-        "ON CONFLICT(mongo_user_id) DO UPDATE SET "
-        "kiwoom_app_key=excluded.kiwoom_app_key, kiwoom_secret=excluded.kiwoom_secret, "
-        "toss_app_key=excluded.toss_app_key, toss_secret=excluded.toss_secret, "
-        "updated_at=excluded.updated_at",
-        (user["id"], json.dumps({"broker": body.broker, "app_key": body.app_key,
-                                  "account_no": body.account_no, "paper": body.paper}),
-         body.app_secret, "", "", now),
+    await mdb.broker_settings.update_one(
+        {"user_id": user["id"]},
+        {"$set": {
+            "broker":     body.broker,
+            "app_key":    body.app_key,
+            "app_secret": body.app_secret,
+            "account_no": body.account_no,
+            "paper":      body.paper,
+            "updated_at": now,
+        }},
+        upsert=True,
     )
-    await db.commit()
     return {"ok": True}
 
 
 @router.get("/broker/settings")
 async def get_broker_settings(
     user=Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
+    mdb=Depends(get_mdb),
 ):
-    async with db.execute(
-        "SELECT kiwoom_app_key, kiwoom_secret FROM broker_settings WHERE mongo_user_id=?",
-        (user["id"],)
-    ) as cur:
-        row = await cur.fetchone()
-    if not row or not row["kiwoom_app_key"]:
+    doc = await mdb.broker_settings.find_one({"user_id": user["id"]})
+    if not doc:
         return {"broker": "mock", "connected": False, "account_no": "", "paper": True}
-    try:
-        cfg = json.loads(row["kiwoom_app_key"])
-    except Exception:
-        cfg = {}
-    masked = (cfg.get("app_key", "") or "")
-    masked = masked[:4] + "****" if masked else ""
+    key = doc.get("app_key", "")
+    masked = key[:4] + "****" if key else ""
     return {
-        "broker":     cfg.get("broker", "mock"),
-        "connected":  bool(cfg.get("app_key")),
+        "broker":     doc.get("broker", "mock"),
+        "connected":  bool(key),
         "app_key":    masked,
-        "account_no": cfg.get("account_no", ""),
-        "paper":      cfg.get("paper", True),
+        "account_no": doc.get("account_no", ""),
+        "paper":      doc.get("paper", True),
     }
 
 
-async def _get_broker_client(user: dict, db: aiosqlite.Connection):
-    async with db.execute(
-        "SELECT kiwoom_app_key, kiwoom_secret FROM broker_settings WHERE mongo_user_id=?",
-        (user["id"],)
-    ) as cur:
-        row = await cur.fetchone()
-    if not row or not row["kiwoom_app_key"]:
+async def _get_broker_client(user: dict, mdb):
+    doc = await mdb.broker_settings.find_one({"user_id": user["id"]})
+    if not doc:
         return get_broker_client("mock")
-    try:
-        cfg = json.loads(row["kiwoom_app_key"])
-    except Exception:
-        cfg = {}
     return get_broker_client(
-        broker     = cfg.get("broker", "mock"),
-        app_key    = cfg.get("app_key", ""),
-        app_secret = row["kiwoom_secret"] or "",
-        paper      = cfg.get("paper", True),
+        broker     = doc.get("broker", "mock"),
+        app_key    = doc.get("app_key", ""),
+        app_secret = doc.get("app_secret", ""),
+        paper      = doc.get("paper", True),
     )
 
 
 # ── 증권사 API 실시간 조회 ────────────────────────────────────────────
+
 @router.get("/broker/price")
 async def broker_price(
     symbol: str = Query(...),
     user=Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
+    mdb=Depends(get_mdb),
 ):
-    client = await _get_broker_client(user, db)
+    client = await _get_broker_client(user, mdb)
     try:
         info = await client.get_price(symbol)
         return {
-            "symbol":     info.symbol,
-            "name":       info.name,
-            "current":    info.current,
-            "open":       info.open,
-            "high":       info.high,
-            "low":        info.low,
-            "volume":     info.volume,
-            "change":     info.change,
-            "change_pct": info.change_pct,
+            "symbol": info.symbol, "name": info.name,
+            "current": info.current, "open": info.open,
+            "high": info.high, "low": info.low,
+            "volume": info.volume, "change": info.change, "change_pct": info.change_pct,
         }
     except Exception as e:
         raise HTTPException(502, f"증권사 API 오류: {e}")
@@ -284,19 +265,11 @@ async def broker_price(
 @router.get("/broker/balance")
 async def broker_balance(
     user=Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
+    mdb=Depends(get_mdb),
 ):
-    client = await _get_broker_client(user, db)
-    async with db.execute(
-        "SELECT kiwoom_app_key FROM broker_settings WHERE mongo_user_id=?",
-        (user["id"],)
-    ) as cur:
-        row = await cur.fetchone()
-    try:
-        cfg = json.loads(row["kiwoom_app_key"]) if row and row["kiwoom_app_key"] else {}
-    except Exception:
-        cfg = {}
-    account_no = cfg.get("account_no", "")
+    client = await _get_broker_client(user, mdb)
+    doc = await mdb.broker_settings.find_one({"user_id": user["id"]}) or {}
+    account_no = doc.get("account_no", "")
     try:
         bal = await client.get_balance(account_no)
         return {
@@ -304,16 +277,10 @@ async def broker_balance(
             "total_buy":  bal.total_buy,
             "total_gain": bal.total_gain,
             "holdings": [
-                {
-                    "symbol":        h.symbol,
-                    "name":          h.name,
-                    "quantity":      h.quantity,
-                    "avg_price":     h.avg_price,
-                    "current_price": h.current_price,
-                    "eval_amount":   h.eval_amount,
-                    "gain_loss":     h.gain_loss,
-                    "gain_pct":      h.gain_pct,
-                }
+                {"symbol": h.symbol, "name": h.name, "quantity": h.quantity,
+                 "avg_price": h.avg_price, "current_price": h.current_price,
+                 "eval_amount": h.eval_amount, "gain_loss": h.gain_loss,
+                 "gain_pct": h.gain_pct}
                 for h in bal.holdings
             ],
         }
@@ -324,12 +291,12 @@ async def broker_balance(
 @router.get("/broker/ohlcv")
 async def broker_ohlcv(
     symbol: str = Query(...),
-    start: str = Query(..., description="YYYYMMDD"),
-    end:   str = Query(..., description="YYYYMMDD"),
+    start: str = Query(...),
+    end: str = Query(...),
     user=Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
+    mdb=Depends(get_mdb),
 ):
-    client = await _get_broker_client(user, db)
+    client = await _get_broker_client(user, mdb)
     try:
         rows = await client.get_daily_ohlcv(symbol, start, end)
         return {"candles": rows}
@@ -339,7 +306,7 @@ async def broker_ohlcv(
 
 class BrokerOrderBody(BaseModel):
     symbol:   str
-    side:     str    # buy | sell
+    side:     str
     quantity: int
     price:    float
 
@@ -348,27 +315,21 @@ class BrokerOrderBody(BaseModel):
 async def broker_order(
     body: BrokerOrderBody,
     user=Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
+    mdb=Depends(get_mdb),
 ):
-    client = await _get_broker_client(user, db)
-    async with db.execute(
-        "SELECT kiwoom_app_key FROM broker_settings WHERE mongo_user_id=?",
-        (user["id"],)
-    ) as cur:
-        row = await cur.fetchone()
+    client = await _get_broker_client(user, mdb)
+    doc = await mdb.broker_settings.find_one({"user_id": user["id"]}) or {}
+    account_no = doc.get("account_no", "")
     try:
-        cfg = json.loads(row["kiwoom_app_key"]) if row and row["kiwoom_app_key"] else {}
-    except Exception:
-        cfg = {}
-    account_no = cfg.get("account_no", "")
-    try:
-        result = await client.place_order(account_no, body.symbol, body.side, body.quantity, body.price)
+        result = await client.place_order(account_no, body.symbol, body.side,
+                                          body.quantity, body.price)
         return {"ok": True, "result": result}
     except Exception as e:
         raise HTTPException(502, f"증권사 API 주문 오류: {e}")
 
 
 # ── 자동매매 제어 ─────────────────────────────────────────────────────
+
 @router.post("/auto-trade/start")
 async def start_auto_trade(user=Depends(get_current_user)):
     started = auto_trade.start_auto_trade()
