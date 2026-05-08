@@ -429,7 +429,14 @@ async def quant_auto_status(user=Depends(get_current_user)):
         cycle_time = cycle.get("time")
         for t in cycle.get("trades", []):
             logs.append({"time": cycle_time, "message": f"{t.get('symbol')} {t.get('action')} {t.get('quantity')}주"})
-        signals.extend(cycle.get("signals", []))
+        for s in cycle.get("signals", []):
+            signals.append({
+                "symbol": s.get("symbol"),
+                "name": s.get("name"),
+                "price": s.get("price"),
+                "action": s.get("action"),
+                "score": s.get("score"),
+            })
     return {"running": status.get("running", False), "logs": logs[-50:], "signals": signals[-30:]}
 
 

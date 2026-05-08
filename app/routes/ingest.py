@@ -67,7 +67,13 @@ async def crawl_naver(
     ollama = get_ollama()
     log: list[str] = []
     chunks = await crawl_naver_stock(body.code, mdb, ollama, log)
-    return {"ok": True, "chunks": chunks, "log": log}
+    safe_log = []
+    for line in log:
+        if line.strip().startswith("[ERROR]"):
+            safe_log.append("[ERROR] 크롤링 처리 중 오류가 발생했습니다.")
+        else:
+            safe_log.append(line)
+    return {"ok": True, "chunks": chunks, "log": safe_log}
 
 
 @router.post("/ingest/local-docs")
