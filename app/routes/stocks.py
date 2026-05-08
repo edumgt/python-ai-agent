@@ -422,9 +422,8 @@ async def quant_auto_stop(user=Depends(get_current_user)):
 @router.get("/quant/auto/status")
 async def quant_auto_status(user=Depends(get_current_user)):
     """기존 프론트 호환 경로."""
-    status = auto_trade.get_status()
     return {
-        "running": status.get("running", False),
+        "running": auto_trade.is_running(),
         "logs": [],
         "signals": [],
         "message": "자동매매 상세 로그는 /api/auto-trade/status에서 확인하세요.",

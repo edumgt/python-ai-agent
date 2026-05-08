@@ -19,6 +19,11 @@ def get_status() -> dict:
     }
 
 
+def is_running() -> bool:
+    """자동매매 루프 실행 상태만 반환."""
+    return _is_running
+
+
 async def _execute_virtual_trade(
     mdb,
     user_id: str,
