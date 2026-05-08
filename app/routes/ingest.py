@@ -6,7 +6,7 @@ from app.database.mongo import get_mdb
 from app.lib.session import get_current_user
 from app.lib.ollama import get_ollama
 from app.services.financial_ingest import run_full_ingest
-from app.services.crawl import run_auto_crawl, crawl_url, _chunk_text, _store_qdrant
+from app.services.crawl import run_auto_crawl, crawl_url, crawl_naver_stock, _chunk_text, _store_qdrant
 from app.services.translation_ingest import (
     run_translation_ingest,
     translation_search,
@@ -50,6 +50,23 @@ async def crawl_manual(
     ollama = get_ollama()
     log: list[str] = []
     chunks = await crawl_url(body.url, mdb, ollama, log)
+    return {"ok": True, "chunks": chunks, "log": log}
+
+
+class CrawlNaverBody(BaseModel):
+    code: str  # 6-digit stock code (e.g. 005930)
+
+
+@router.post("/ingest/crawl/naver")
+async def crawl_naver(
+    body: CrawlNaverBody,
+    user=Depends(get_current_user),
+    mdb=Depends(get_mdb),
+):
+    """네이버 금융 종목 페이지 전용 크롤링."""
+    ollama = get_ollama()
+    log: list[str] = []
+    chunks = await crawl_naver_stock(body.code, mdb, ollama, log)
     return {"ok": True, "chunks": chunks, "log": log}
 
 

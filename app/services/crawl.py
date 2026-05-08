@@ -3,6 +3,7 @@ import httpx
 import re
 from datetime import datetime, timezone
 from html.parser import HTMLParser
+from bs4 import BeautifulSoup
 from app.config import settings
 from app.lib.ollama import OllamaClient
 
@@ -201,6 +202,79 @@ async def crawl_url(
         upsert=True,
     )
     log.append(f"✓ {title_text[:50]} → {len(chunks)}청크 (Qdrant {stored}건)")
+    return len(chunks)
+
+
+async def crawl_naver_stock(
+    code: str, mdb, ollama: OllamaClient, log: list[str],
+) -> int:
+    """네이버 금융 종목 메인 페이지 전용 크롤링."""
+    stock_code = re.sub(r"[^0-9]", "", code or "")
+    if len(stock_code) != 6:
+        log.append("[ERROR] 종목코드는 6자리 숫자여야 합니다. (예: 005930)")
+        return 0
+
+    url = f"https://finance.naver.com/item/main.naver?code={stock_code}"
+    async with httpx.AsyncClient(
+        timeout=20.0,
+        follow_redirects=True,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; FinAgent/1.0)",
+            "Referer": "https://finance.naver.com/",
+        },
+    ) as client:
+        try:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            html = resp.text
+        except Exception as e:
+            log.append(f"[ERROR] 네이버 금융 요청 실패: {e}")
+            return 0
+
+    soup = BeautifulSoup(html, "html.parser")
+    name = ""
+    h2 = soup.select_one("div.wrap_company h2 a")
+    if h2:
+        name = h2.get_text(strip=True)
+
+    current = ""
+    no_today = soup.select_one("p.no_today span.blind")
+    if no_today:
+        current = no_today.get_text(strip=True)
+
+    news_items = []
+    for a in soup.select("div.section.new_bbs ul li a")[:10]:
+        t = a.get("title") or a.get_text(strip=True)
+        if t:
+            news_items.append(t.strip())
+
+    if not name and not news_items:
+        log.append("[ERROR] 네이버 페이지 파싱 실패")
+        return 0
+
+    text = f"종목명: {name}\n현재가: {current}\n"
+    if news_items:
+        text += "주요 뉴스:\n" + "\n".join(f"- {n}" for n in news_items)
+
+    chunks = _chunk_text(text)
+    meta = {
+        "url": url,
+        "title": f"{name or stock_code} 네이버금융",
+        "source": f"naver:stock:{stock_code}",
+        "stock_code": stock_code,
+    }
+    stored = await _store_qdrant(chunks, meta, ollama)
+    await mdb.crawled_docs.update_one(
+        {"url": url},
+        {"$set": {
+            "title": meta["title"],
+            "content": text[:5000],
+            "source": meta["source"],
+            "crawled_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    log.append(f"✓ {meta['title']} → {len(chunks)}청크 (Qdrant {stored}건)")
     return len(chunks)
 
 

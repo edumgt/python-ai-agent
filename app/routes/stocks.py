@@ -9,6 +9,7 @@ from app.services.stock import (
     get_quant_indicators, QUANT_STOCKS,
 )
 from app.services import auto_trade
+from app.services.quant_pipeline import backtest_custom_indicator
 from app.services.brokers.factory import get_broker_client
 
 router = APIRouter(prefix="/api")
@@ -44,6 +45,49 @@ async def quant_indicators(
 @router.get("/stocks/quant/list")
 async def quant_stock_list():
     return {"stocks": QUANT_STOCKS}
+
+
+@router.get("/stocks/signals")
+async def stock_signals(
+    signal: str = Query("all", description="all | buy | sell"),
+    model: str = Query("lightgbm", description="lightgbm | rsi | ma | bollinger"),
+    min_confidence: int = Query(65, ge=0, le=100),
+):
+    """대표 종목 패턴 시그널 스크리닝."""
+    rows = []
+    for stock in QUANT_STOCKS:
+        indicators = await get_quant_indicators(stock["symbol"], period="1y")
+        if indicators.get("error"):
+            continue
+        quote = await get_quote(stock["symbol"])
+        action = (indicators.get("signal") or {}).get("action", "관망")
+        score = float((indicators.get("signal") or {}).get("score", 0))
+        mapped = "HOLD"
+        if action in ("강력 매수", "매수"):
+            mapped = "BUY"
+        elif action in ("강력 매도", "매도"):
+            mapped = "SELL"
+        confidence = int(max(50, min(95, 50 + abs(score) * 12)))
+        row = {
+            "symbol": stock["symbol"],
+            "name": stock["name"],
+            "sector": stock.get("sector", ""),
+            "model": model,
+            "signal": mapped,
+            "confidence": confidence,
+            "score": score,
+            "rsi": indicators.get("current_rsi"),
+            "price": quote.get("price") or indicators.get("current_price"),
+            "change_pct": quote.get("change_pct"),
+        }
+        rows.append(row)
+
+    signal_filter = (signal or "all").lower()
+    if signal_filter in ("buy", "sell"):
+        rows = [r for r in rows if r["signal"].lower() == signal_filter]
+    rows = [r for r in rows if r["confidence"] >= int(min_confidence)]
+    rows.sort(key=lambda x: (x["confidence"], abs(x["score"])), reverse=True)
+    return {"signals": rows, "count": len(rows)}
 
 
 # ── 포트폴리오 (MongoDB) ──────────────────────────────────────────────
@@ -328,6 +372,20 @@ async def broker_order(
         raise HTTPException(502, f"증권사 API 주문 오류: {e}")
 
 
+@router.get("/broker/test")
+async def broker_test(
+    user=Depends(get_current_user),
+    mdb=Depends(get_mdb),
+):
+    """증권사 연결 테스트용 간단 시세 조회."""
+    client = await _get_broker_client(user, mdb)
+    try:
+        info = await client.get_price("005930.KS")
+        return {"ok": True, "broker_price": {"symbol": info.symbol, "current": info.current}}
+    except Exception as e:
+        raise HTTPException(502, f"증권사 API 연결 테스트 오류: {e}")
+
+
 # ── 자동매매 제어 ─────────────────────────────────────────────────────
 
 @router.post("/auto-trade/start")
@@ -345,3 +403,60 @@ async def stop_auto_trade(user=Depends(get_current_user)):
 @router.get("/auto-trade/status")
 async def auto_trade_status(user=Depends(get_current_user)):
     return auto_trade.get_status()
+
+
+@router.post("/quant/auto/start")
+async def quant_auto_start(user=Depends(get_current_user)):
+    """기존 프론트 호환 경로."""
+    started = auto_trade.start_auto_trade()
+    return {"ok": True, "started": started}
+
+
+@router.post("/quant/auto/stop")
+async def quant_auto_stop(user=Depends(get_current_user)):
+    """기존 프론트 호환 경로."""
+    stopped = auto_trade.stop_auto_trade()
+    return {"ok": True, "stopped": stopped}
+
+
+@router.get("/quant/auto/status")
+async def quant_auto_status(user=Depends(get_current_user)):
+    """기존 프론트 호환 경로."""
+    status = auto_trade.get_status()
+    logs = []
+    signals = []
+    for cycle in status.get("log", [])[-20:]:
+        cycle_time = cycle.get("time")
+        for t in cycle.get("trades", []):
+            logs.append({"time": cycle_time, "message": f"{t.get('symbol')} {t.get('action')} {t.get('quantity')}주"})
+        signals.extend(cycle.get("signals", []))
+    return {"running": status.get("running", False), "logs": logs[-50:], "signals": signals[-30:]}
+
+
+@router.get("/quant/pipeline")
+async def quant_pipeline_indicator_backtest(
+    symbol: str = Query("005930.KS"),
+    period: str = Query("10y"),
+    short: int = Query(5, ge=2, le=30),
+    mid: int = Query(20, ge=3, le=120),
+    rsi: int = Query(14, ge=5, le=40),
+    buy_th: float = Query(35.0, ge=5.0, le=50.0),
+    _user=Depends(get_current_user),
+):
+    """커스텀 인디케이터 실백테스트."""
+    candle_data = await get_candles(symbol, period=period, interval="1d")
+    candles = candle_data.get("candles", [])
+    if not candles:
+        raise HTTPException(404, f"종목 데이터 없음: {symbol}")
+    result = backtest_custom_indicator(
+        candles=candles,
+        short_window=short,
+        mid_window=mid,
+        rsi_period=rsi,
+        buy_threshold=buy_th,
+    )
+    if "error" in result:
+        raise HTTPException(422, result["error"])
+    result["symbol"] = symbol
+    result["period"] = period
+    return result

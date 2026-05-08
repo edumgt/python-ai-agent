@@ -412,3 +412,64 @@ async def run_pipeline(
         "alpaca":         alpaca_result,
         "data_rows":      len(df),
     }
+
+
+def backtest_custom_indicator(
+    candles: list[dict],
+    short_window: int = 5,
+    mid_window: int = 20,
+    rsi_period: int = 14,
+    buy_threshold: float = 35.0,
+) -> dict:
+    """사용자 지정(MA+RSI) 전략 백테스트."""
+    if len(candles) < 80:
+        return {"error": f"데이터 부족: {len(candles)}개 (최소 80개 필요)"}
+
+    short_window = max(2, int(short_window))
+    mid_window = max(short_window + 1, int(mid_window))
+    rsi_period = max(5, int(rsi_period))
+    buy_threshold = float(max(5, min(50, buy_threshold)))
+    sell_threshold = float(100 - buy_threshold)
+
+    df = preprocess(candles)
+    close = df["close"].astype(float)
+
+    ma_short = close.rolling(short_window).mean()
+    ma_mid = close.rolling(mid_window).mean()
+
+    delta = close.diff()
+    gain = delta.clip(lower=0).rolling(rsi_period).mean()
+    loss = (-delta.clip(upper=0)).rolling(rsi_period).mean()
+    rs = gain / loss.replace(0, np.nan)
+    rsi = 100 - (100 / (1 + rs))
+
+    golden_cross = (ma_short > ma_mid) & (ma_short.shift(1) <= ma_mid.shift(1))
+    dead_cross = (ma_short < ma_mid) & (ma_short.shift(1) >= ma_mid.shift(1))
+    buy_cond = golden_cross & (rsi < buy_threshold)
+    sell_cond = dead_cross | (rsi > sell_threshold)
+
+    regime = pd.Series(np.nan, index=df.index)
+    regime.loc[buy_cond] = 1.0
+    regime.loc[sell_cond] = 0.0
+    position = regime.ffill().fillna(0.0).rename("ml_signal")
+
+    bt = backtest(df, position)
+    return {
+        "strategy": {
+            "name": "custom_ma_rsi",
+            "short_window": short_window,
+            "mid_window": mid_window,
+            "rsi_period": rsi_period,
+            "buy_threshold": buy_threshold,
+            "sell_threshold": sell_threshold,
+        },
+        "return_total": round(bt["total_return_pct"] / 100.0, 4),
+        "return_buy_hold": round(bt["buy_hold_return_pct"] / 100.0, 4),
+        "sharpe": bt["sharpe_ratio"],
+        "mdd": round(bt["mdd_pct"] / 100.0, 4),
+        "trade_count": bt["trade_count"],
+        "win_rate_pct": bt["win_rate_pct"],
+        "times": bt["times"],
+        "cum_returns": bt["cum_returns"],
+        "bh_returns": bt["bh_returns"],
+    }
