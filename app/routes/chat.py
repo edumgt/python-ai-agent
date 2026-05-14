@@ -5,8 +5,8 @@ import httpx
 from app.database.mongo import get_mdb
 from app.lib.session import get_current_user
 from app.lib.ollama import get_ollama
-from app.services.agent import run_agent
-from app.services.crawl import qdrant_search
+from app.services.langgraph_agent import run_agent   # LangGraph 기반 에이전트
+from app.services.rag_pipeline import rag_search     # LangChain LCEL RAG
 from app.config import settings
 
 router = APIRouter(prefix="/api")
@@ -14,8 +14,8 @@ router = APIRouter(prefix="/api")
 
 class ChatBody(BaseModel):
     question: str
-    history: list[dict] = []
-    use_rag: bool = True
+    history:  list[dict] = []
+    use_rag:  bool = True
 
 
 @router.post("/chat")
@@ -26,10 +26,11 @@ async def chat(
 ):
     ollama = get_ollama()
 
+    # LangChain RAG 검색 (Qdrant)
     rag_context = ""
     if body.use_rag:
         try:
-            docs = await qdrant_search(body.question, ollama, top_k=3)
+            docs = await rag_search(body.question, top_k=settings.TOP_K)
             if docs:
                 rag_context = "\n\n".join(
                     f"[{d['title']}] {d['text'][:500]}" for d in docs
@@ -37,9 +38,11 @@ async def chat(
         except Exception:
             pass
 
+    # LangGraph 에이전트 실행
     try:
         result = await run_agent(
-            mdb, ollama, settings.LLM_MODEL, body.question, body.history,
+            mdb, ollama, settings.LLM_MODEL,
+            body.question, body.history,
             rag_context=rag_context,
         )
     except httpx.HTTPStatusError as e:

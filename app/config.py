@@ -14,11 +14,13 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
     LLM_MODEL: str = "llama3.1"
     EMBED_MODEL: str = "nomic-embed-text"
+    VLM_MODEL: str = "llava"          # Vision-Language Model for image/slide description
     OLLAMA_TIMEOUT: float = 300.0
 
     VECTOR_STORE: str = "qdrant"
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_COLLECTION: str = "fin_chunks"
+    DOCUMENT_COLLECTION: str = "fin_chunks"  # Qdrant collection for uploaded documents
 
     DATA_DIR: str = "./data"
     TOP_K: int = 6
