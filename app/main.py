@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 
 from app.database.mongo import connect_mongo, close_mongo, ensure_indexes
 from app.lib.session import connect_redis, close_redis
-from app.routes import health, auth, chat, ingest, stocks, library, admin, system, quant, ml, macro, documents
+from app.routes import health, auth, chat, ingest, stocks, library, admin, system, quant, ml, macro, documents, notification
 
 
 @asynccontextmanager
@@ -49,6 +49,7 @@ app.include_router(quant.router)
 app.include_router(ml.router)
 app.include_router(macro.router)
 app.include_router(documents.router)
+app.include_router(notification.router)
 
 # 정적 파일 (프론트엔드)
 _public = os.path.join(os.path.dirname(__file__), "..", "public")

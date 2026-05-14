@@ -261,6 +261,7 @@ async def _run_quant_cycle(user_id: str = "quant_system") -> None:
                     quantity = trade.get("quantity", qty),
                     price    = price,
                     reason   = " | ".join(reasons),
+                    user_id  = user_id,
                 )
 
         elif action in ("강력 매도", "매도"):
@@ -282,6 +283,7 @@ async def _run_quant_cycle(user_id: str = "quant_system") -> None:
                         quantity = trade.get("quantity", qty),
                         price    = price,
                         reason   = " | ".join(reasons),
+                        user_id  = user_id,
                     )
 
     account = await mdb.quant_virtual_accounts.find_one({"user_id": user_id}) or {}
@@ -332,7 +334,7 @@ def start_auto_trade(user_id: str = "quant_system") -> bool:
         return False
     _auto_trade_user_id = user_id or "quant_system"
     _auto_trade_task = asyncio.create_task(_auto_trade_loop(_auto_trade_user_id))
-    asyncio.create_task(notification.notify_auto_trade_started())
+    asyncio.create_task(notification.notify_auto_trade_started(user_id=_auto_trade_user_id))
     return True
 
 
@@ -340,6 +342,6 @@ def stop_auto_trade() -> bool:
     global _auto_trade_task
     if _auto_trade_task and not _auto_trade_task.done():
         _auto_trade_task.cancel()
-        asyncio.create_task(notification.notify_auto_trade_stopped())
+        asyncio.create_task(notification.notify_auto_trade_stopped(user_id=_auto_trade_user_id))
         return True
     return False

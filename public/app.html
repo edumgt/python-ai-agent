@@ -701,6 +701,159 @@
       </div>
     </div>
 
+    <!-- 4-5. 알림 설정 -->
+    <div class="view" data-view="notification-settings">
+      <div class="card space-y-6">
+        <div>
+          <h2 class="text-lg font-semibold mb-1">🔔 알림 채널 설정</h2>
+          <p class="text-xs text-slate-400">
+            매매 성공·실패 시 알림을 받을 채널을 선택하고 인증 정보를 입력하세요.
+            복수 채널을 동시에 활성화할 수 있습니다.
+          </p>
+        </div>
+
+        <!-- 채널 선택 -->
+        <div>
+          <label class="text-sm text-slate-300 font-medium block mb-2">활성화할 채널 선택</label>
+          <div class="flex flex-wrap gap-4 text-sm">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="noti-ch-telegram" class="noti-channel w-4 h-4 rounded" value="telegram" />
+              <span>📱 텔레그램</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="noti-ch-slack" class="noti-channel w-4 h-4 rounded" value="slack" />
+              <span>💬 Slack</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="noti-ch-email" class="noti-channel w-4 h-4 rounded" value="email" />
+              <span>📧 이메일</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="noti-ch-kakao" class="noti-channel w-4 h-4 rounded" value="kakao" />
+              <span>🟡 카카오 알림톡</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="noti-ch-sms" class="noti-channel w-4 h-4 rounded" value="sms" />
+              <span>📲 SMS</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 텔레그램 -->
+        <div id="noti-section-telegram" class="hidden space-y-2">
+          <h3 class="text-sm font-semibold text-slate-300">📱 텔레그램 봇 설정</h3>
+          <p class="text-xs text-slate-400">BotFather에서 봇을 만들고 토큰과 채팅 ID를 입력하세요.</p>
+          <div class="grid md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-slate-400">Bot Token</label>
+              <input id="noti-telegram-token" type="password" class="input mt-1" placeholder="1234567890:AAFxxxxxxx" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">Chat ID</label>
+              <input id="noti-telegram-chat-id" type="text" class="input mt-1" placeholder="-100xxxxxxxxx" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Slack -->
+        <div id="noti-section-slack" class="hidden space-y-2">
+          <h3 class="text-sm font-semibold text-slate-300">💬 Slack Incoming Webhook</h3>
+          <p class="text-xs text-slate-400">Slack 앱에서 Incoming Webhook을 생성하고 URL을 입력하세요.</p>
+          <div>
+            <label class="text-xs text-slate-400">Webhook URL</label>
+            <input id="noti-slack-webhook" type="text" class="input mt-1" placeholder="https://hooks.slack.com/services/..." />
+          </div>
+        </div>
+
+        <!-- 이메일 -->
+        <div id="noti-section-email" class="hidden space-y-2">
+          <h3 class="text-sm font-semibold text-slate-300">📧 이메일 (SMTP)</h3>
+          <p class="text-xs text-slate-400">Gmail 등 SMTP 서버 정보와 수신 이메일을 입력하세요.</p>
+          <div class="grid md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-slate-400">SMTP 호스트</label>
+              <input id="noti-email-host" type="text" class="input mt-1" placeholder="smtp.gmail.com" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">SMTP 포트</label>
+              <input id="noti-email-port" type="number" class="input mt-1" value="587" min="1" max="65535" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">계정 (발신)</label>
+              <input id="noti-email-user" type="text" class="input mt-1" placeholder="your@gmail.com" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">앱 비밀번호</label>
+              <input id="noti-email-password" type="password" class="input mt-1" placeholder="Gmail 앱 비밀번호" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">발신자 표시 이름 (선택)</label>
+              <input id="noti-email-from" type="text" class="input mt-1" placeholder="매매알림 <your@gmail.com>" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">수신 이메일</label>
+              <input id="noti-email-to" type="text" class="input mt-1" placeholder="recv@example.com" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 카카오 알림톡 -->
+        <div id="noti-section-kakao" class="hidden space-y-2">
+          <h3 class="text-sm font-semibold text-slate-300">🟡 카카오 알림톡 (CoolSMS)</h3>
+          <p class="text-xs text-slate-400">CoolSMS API를 통한 카카오 알림톡(친구톡) 발송입니다. <a href="https://coolsms.co.kr" target="_blank" class="text-indigo-400 underline">coolsms.co.kr</a>에서 발급받으세요.</p>
+          <div class="grid md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-slate-400">API Key</label>
+              <input id="noti-kakao-api-key" type="password" class="input mt-1" placeholder="CoolSMS API Key" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">API Secret</label>
+              <input id="noti-kakao-api-secret" type="password" class="input mt-1" placeholder="CoolSMS API Secret" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">발신 프로필 키 (Sender Key)</label>
+              <input id="noti-kakao-sender-key" type="text" class="input mt-1" placeholder="카카오 채널 발신 프로필 키" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">수신 전화번호</label>
+              <input id="noti-kakao-phone" type="text" class="input mt-1" placeholder="01012345678" />
+            </div>
+          </div>
+        </div>
+
+        <!-- SMS -->
+        <div id="noti-section-sms" class="hidden space-y-2">
+          <h3 class="text-sm font-semibold text-slate-300">📲 SMS (CoolSMS)</h3>
+          <p class="text-xs text-slate-400">카카오 알림톡과 동일한 CoolSMS API Key/Secret을 사용합니다.</p>
+          <div class="grid md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-slate-400">API Key</label>
+              <input id="noti-sms-api-key" type="password" class="input mt-1" placeholder="CoolSMS API Key" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">API Secret</label>
+              <input id="noti-sms-api-secret" type="password" class="input mt-1" placeholder="CoolSMS API Secret" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">발신 번호</label>
+              <input id="noti-sms-from" type="text" class="input mt-1" placeholder="01012345678 (등록된 번호)" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">수신 번호</label>
+              <input id="noti-sms-to" type="text" class="input mt-1" placeholder="01087654321" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 저장 / 테스트 버튼 -->
+        <div class="flex gap-2 pt-2">
+          <button id="noti-save" class="btn-primary">저장</button>
+          <button id="noti-test" class="btn-secondary">테스트 알림 발송</button>
+        </div>
+        <div id="noti-status" class="text-sm text-slate-400"></div>
+      </div>
+    </div>
+
     <!-- ══ 5. 미국주식 (Alpaca Mockup) ══════════════════════════════════ -->
     <!-- 5-1. 미국주식 대시보드 -->
     <div class="view" data-view="us-dashboard">
@@ -1843,6 +1996,7 @@ const GNB_MENUS = {
       { key: "quant-auto",      icon: "fa-solid fa-robot",           label: "자동매매 현황" },
       { key: "quant-backtest",  icon: "fa-solid fa-flask",           label: "전략 분석" },
       { key: "settings",        icon: "fa-solid fa-sliders",         label: "증권사 API 설정" },
+      { key: "notification-settings", icon: "fa-solid fa-bell",      label: "알림 설정" },
     ],
   },
   us: {
@@ -2598,6 +2752,7 @@ function onViewActivated(view) {
   if (view === "quant-dashboard") { loadQuantDashboard(); }
   if (view === "quant-auto") loadAutoTradeStatus();
   if (view === "settings") loadSettings();
+  if (view === "notification-settings") loadNotificationSettings();
   if (view === "crawl-manual") loadCrawlList();
   if (view === "us-dashboard")  loadUsDashboard();
   if (view === "us-chart")      loadUsChart();
@@ -3247,6 +3402,106 @@ document.getElementById("broker-test")?.addEventListener("click", async () => {
     setToast("연결 성공", "ok");
   } catch (e) {
     el.textContent = `❌ 연결 실패: ${e.message}`;
+    setToast(e.message, "error");
+  }
+});
+
+document.getElementById("broker-test")?.addEventListener("click", async () => {
+  const el = document.getElementById("broker-status");
+  el.textContent = "연결 테스트 중...";
+  try {
+    const data = await api("/api/broker/price?symbol=005930.KS");
+    el.textContent = `✅ 연결 성공 – 삼성전자 현재가: ${fmt(data.current)}원`;
+    setToast("연결 성공", "ok");
+  } catch (e) {
+    el.textContent = `❌ 연결 실패: ${e.message}`;
+    setToast(e.message, "error");
+  }
+});
+
+// ── 알림 설정 ──────────────────────────────────────────────────────
+function toggleNotiSections() {
+  const chMap = { telegram: "noti-section-telegram", slack: "noti-section-slack",
+                  email: "noti-section-email", kakao: "noti-section-kakao", sms: "noti-section-sms" };
+  document.querySelectorAll(".noti-channel").forEach(cb => {
+    const sec = document.getElementById(chMap[cb.value]);
+    if (sec) sec.classList.toggle("hidden", !cb.checked);
+  });
+}
+document.querySelectorAll(".noti-channel").forEach(cb => cb.addEventListener("change", toggleNotiSections));
+
+async function loadNotificationSettings() {
+  try {
+    const cfg = await api("/api/notification/settings");
+    const channels = cfg.channels || [];
+    document.querySelectorAll(".noti-channel").forEach(cb => { cb.checked = channels.includes(cb.value); });
+    toggleNotiSections();
+    // Telegram
+    document.getElementById("noti-telegram-token").value    = cfg.telegram_token    || "";
+    document.getElementById("noti-telegram-chat-id").value  = cfg.telegram_chat_id  || "";
+    // Slack
+    document.getElementById("noti-slack-webhook").value     = cfg.slack_webhook_url || "";
+    // Email
+    document.getElementById("noti-email-host").value        = cfg.email_host        || "";
+    document.getElementById("noti-email-port").value        = cfg.email_port        || 587;
+    document.getElementById("noti-email-user").value        = cfg.email_user        || "";
+    document.getElementById("noti-email-password").value    = cfg.email_password    || "";
+    document.getElementById("noti-email-from").value        = cfg.email_from        || "";
+    document.getElementById("noti-email-to").value          = cfg.email_to          || "";
+    // Kakao
+    document.getElementById("noti-kakao-api-key").value     = cfg.kakao_api_key     || "";
+    document.getElementById("noti-kakao-api-secret").value  = cfg.kakao_api_secret  || "";
+    document.getElementById("noti-kakao-sender-key").value  = cfg.kakao_sender_key  || "";
+    document.getElementById("noti-kakao-phone").value       = cfg.kakao_phone       || "";
+    // SMS
+    document.getElementById("noti-sms-api-key").value       = cfg.sms_api_key       || "";
+    document.getElementById("noti-sms-api-secret").value    = cfg.sms_api_secret    || "";
+    document.getElementById("noti-sms-from").value          = cfg.sms_from          || "";
+    document.getElementById("noti-sms-to").value            = cfg.sms_to            || "";
+  } catch {}
+}
+
+document.getElementById("noti-save")?.addEventListener("click", async () => {
+  try {
+    const channels = [...document.querySelectorAll(".noti-channel:checked")].map(cb => cb.value);
+    await api("/api/notification/settings", {
+      method: "POST",
+      body: {
+        channels,
+        telegram_token:    document.getElementById("noti-telegram-token").value,
+        telegram_chat_id:  document.getElementById("noti-telegram-chat-id").value,
+        slack_webhook_url: document.getElementById("noti-slack-webhook").value,
+        email_to:          document.getElementById("noti-email-to").value,
+        email_host:        document.getElementById("noti-email-host").value,
+        email_port:        Number(document.getElementById("noti-email-port").value || 587),
+        email_user:        document.getElementById("noti-email-user").value,
+        email_password:    document.getElementById("noti-email-password").value,
+        email_from:        document.getElementById("noti-email-from").value,
+        kakao_api_key:     document.getElementById("noti-kakao-api-key").value,
+        kakao_api_secret:  document.getElementById("noti-kakao-api-secret").value,
+        kakao_sender_key:  document.getElementById("noti-kakao-sender-key").value,
+        kakao_phone:       document.getElementById("noti-kakao-phone").value,
+        sms_api_key:       document.getElementById("noti-sms-api-key").value,
+        sms_api_secret:    document.getElementById("noti-sms-api-secret").value,
+        sms_from:          document.getElementById("noti-sms-from").value,
+        sms_to:            document.getElementById("noti-sms-to").value,
+      },
+    });
+    setToast("알림 설정이 저장되었습니다.", "ok");
+    document.getElementById("noti-status").textContent = "✅ 저장 완료";
+    loadNotificationSettings();
+  } catch (e) { setToast(e.message, "error"); }
+});
+
+document.getElementById("noti-test")?.addEventListener("click", async () => {
+  const el = document.getElementById("noti-status");
+  el.textContent = "테스트 알림 전송 중...";
+  try {
+    await api("/api/notification/test", { method: "POST" });
+    el.textContent = "✅ 테스트 알림을 전송했습니다. 수신 여부를 확인하세요.";
+    setToast("테스트 알림 전송 완료", "ok");
+  } catch (e) {
+    el.textContent = `❌ 전송 실패: ${e.message}`;
     setToast(e.message, "error");
   }
 });

@@ -521,6 +521,7 @@ async def broker_order(
                     price     = body.price,
                     required  = required,
                     available = bal.cash,
+                    user_id   = user["id"],
                 )
                 raise HTTPException(
                     422,
@@ -535,6 +536,7 @@ async def broker_order(
             side     = body.side,
             quantity = body.quantity,
             price    = body.price,
+            user_id  = user["id"],
         )
         return {"ok": True, "result": result}
     except Exception as e:
@@ -544,6 +546,7 @@ async def broker_order(
             quantity = body.quantity,
             price    = body.price,
             error    = str(e),
+            user_id  = user["id"],
         )
         raise HTTPException(502, f"증권사 API 주문 오류: {e}")
 

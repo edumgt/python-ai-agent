@@ -30,9 +30,30 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
     COOKIE_SAMESITE: str = "lax"
 
-    # 텔레그램 알림
+    # ── 알림 채널 설정 ──────────────────────────────────────────────────────────
+
+    # 텔레그램
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_CHAT_ID: str = ""
+
+    # Slack Incoming Webhook
+    SLACK_WEBHOOK_URL: str = ""
+
+    # 이메일 (SMTP / STARTTLS)
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+    SMTP_TO: str = ""
+
+    # 카카오 알림톡 · SMS (CoolSMS REST API)
+    COOLSMS_API_KEY: str = ""
+    COOLSMS_API_SECRET: str = ""
+    KAKAO_SENDER_KEY: str = ""   # 카카오 채널 발신 프로필 키
+    KAKAO_PHONE: str = ""        # 수신 전화번호 (예: 01012345678)
+    SMS_FROM: str = ""           # 발신 번호
+    SMS_TO: str = ""             # 수신 번호
 
     class Config:
         env_file = os.getenv("ENV_FILE", ".env.dev")
