@@ -59,7 +59,7 @@ async def _execute_virtual_trade(
         if cash_balance < cost:
             max_qty = int(cash_balance // price) if price > 0 else 0
             if max_qty <= 0:
-                shortfall = max(0.0, cost - cash_balance)
+                shortfall = cost - cash_balance
                 return {
                     "time": now, "symbol": symbol, "name": name,
                     "action": action, "quantity": 0, "price": price,
@@ -236,13 +236,13 @@ async def _run_quant_cycle(user_id: str = "quant_system") -> None:
             continue
         symbol = p.get("symbol", "")
         if symbol not in price_map:
-            logger.warning("현재가 미수신으로 평균단가 사용: user=%s symbol=%s", user_id, symbol)
+            logger.warning("현재가 미수신되어 평균단가 사용: user=%s symbol=%s", user_id, symbol)
         mark_price = float(price_map.get(symbol, p.get("avg_price", 0)))
         holdings_value += qty * mark_price
 
     total_equity = cash_balance + holdings_value
     initial_capital = float(account.get("initial_capital", _INITIAL_CAPITAL))
-    pnl_pct = round((total_equity / initial_capital - 1) * 100, 2) if initial_capital > 0 else 0.0
+    pnl_pct = round((total_equity / initial_capital - 1) * 100, 2) if initial_capital > 0 else None
     cycle_log["account"] = {
         "initial_capital": initial_capital,
         "cash_balance": round(cash_balance, 2),
