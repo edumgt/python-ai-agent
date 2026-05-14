@@ -200,8 +200,9 @@ async def _run_quant_cycle(user_id: str = "quant_system") -> None:
                 continue
             price_map[stock["symbol"]] = float(price)
 
-        except Exception as e:
-            cycle_log["signals"].append({"symbol": stock["symbol"], "error": str(e)})
+        except Exception:
+            logger.exception("자동매매 지표 계산 실패: %s", stock["symbol"])
+            cycle_log["signals"].append({"symbol": stock["symbol"], "error": "지표 계산 실패"})
 
     if symbol_source == "manual":
         target_symbols = [s for s in selected_symbols if s in stock_map]
