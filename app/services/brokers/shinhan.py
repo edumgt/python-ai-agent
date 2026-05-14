@@ -5,6 +5,7 @@ from .mock import MockBrokerClient
 
 class ShinhanClient(MockBrokerClient):
     def __init__(self, app_key: str, app_secret: str):
+        super().__init__()
         self.app_key = app_key
         self.app_secret = app_secret
 
@@ -13,4 +14,3 @@ class ShinhanClient(MockBrokerClient):
         result["msg1"] = f"[SHINHAN-MOCK] 자동감시주문 시뮬레이션: {side.upper()} {symbol} {quantity}주 @{price:,}"
         result["watch_order"] = True
         return result
-

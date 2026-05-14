@@ -6,6 +6,7 @@ from .mock import MockBrokerClient
 
 class DaishinClient(MockBrokerClient):
     def __init__(self, app_key: str, app_secret: str):
+        super().__init__()
         self.app_key = app_key
         self.app_secret = app_secret
 
@@ -35,4 +36,3 @@ class DaishinClient(MockBrokerClient):
     async def get_daily_ohlcv(self, symbol: str, start: str, end: str):
         self._ensure_supported()
         return await super().get_daily_ohlcv(symbol, start, end)
-

@@ -16,6 +16,7 @@ from app.services.brokers.catalog import get_broker_catalog, get_broker_codes
 from app.services import notification
 
 router = APIRouter(prefix="/api")
+DEFAULT_BROKER = "mock"
 
 
 @router.get("/stocks/market")
@@ -228,9 +229,17 @@ async def order_history(
 # ── 증권사 API 설정 (MongoDB) ─────────────────────────────────────────
 
 class BrokerSettingsBody(BaseModel):
+    """브로커 설정 저장용 입력 모델.
+
+    legacy 프론트(iapi)에서 broker_type/paper_trading 키를 보내므로
+    alias를 통해 신규 키(broker/paper)와 함께 병행 지원한다.
+    """
+
+    # 레거시/신규 프론트 혼재 환경에서 미사용 필드가 들어와도 저장 API가 깨지지 않도록 무시.
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
-    broker: str = Field(default="mock", alias="broker_type")
+    # 레거시 프론트(iapi 영역)의 broker_type/paper_trading 페이로드를 계속 수용.
+    broker: str = Field(default=DEFAULT_BROKER, alias="broker_type")
     app_key: str = ""
     app_secret: str = ""
     account_no: str = ""
@@ -248,7 +257,7 @@ async def save_broker_settings(
     user=Depends(get_current_user),
     mdb=Depends(get_mdb),
 ):
-    broker = (body.broker or "mock").strip().lower()
+    broker = (body.broker or DEFAULT_BROKER).strip().lower()
     if broker not in get_broker_codes():
         raise HTTPException(422, f"지원하지 않는 broker: {broker}")
 
@@ -277,24 +286,20 @@ async def get_broker_settings(
     doc = await mdb.broker_settings.find_one({"user_id": user["id"]})
     if not doc:
         return {
-            "broker": "mock",
-            "broker_type": "mock",
+            "broker": DEFAULT_BROKER,
             "connected": False,
             "account_no": "",
             "paper": True,
-            "paper_trading": True,
             "brokers": catalog,
         }
     key = doc.get("app_key", "")
     masked = key[:4] + "****" if key else ""
     return {
-        "broker":     doc.get("broker", "mock"),
-        "broker_type": doc.get("broker", "mock"),
+        "broker":     doc.get("broker", DEFAULT_BROKER),
         "connected":  bool(key),
         "app_key":    masked,
         "account_no": doc.get("account_no", ""),
         "paper":      doc.get("paper", True),
-        "paper_trading": doc.get("paper", True),
         "brokers": catalog,
     }
 

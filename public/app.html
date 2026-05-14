@@ -2290,9 +2290,9 @@ document.getElementById("ibt-run-btn")?.addEventListener("click", loadIndicatorB
 async function loadIndicatorApiSettings() {
   try {
     const data = await api("/api/broker/settings");
-    if (data?.broker_type) {
+    if (data?.broker) {
       const t = document.getElementById("iapi-broker-type");
-      if (t) t.value = data.broker_type;
+      if (t) t.value = data.broker;
     }
     const status = document.getElementById("iapi-status");
     if (status) status.textContent = data?.connected ? "✅ 연결됨" : "연결되지 않음";
@@ -2301,11 +2301,11 @@ async function loadIndicatorApiSettings() {
 
 document.getElementById("iapi-save-btn")?.addEventListener("click", async () => {
   const body = {
-    broker_type: document.getElementById("iapi-broker-type").value,
+    broker: document.getElementById("iapi-broker-type").value,
     app_key:     document.getElementById("iapi-app-key").value,
     app_secret:  document.getElementById("iapi-app-secret").value,
     account_no:  document.getElementById("iapi-account").value,
-    paper_trading: document.getElementById("iapi-paper").checked,
+    paper: document.getElementById("iapi-paper").checked,
   };
   try {
     await api("/api/broker/settings", { method:"POST", body });
@@ -2952,12 +2952,22 @@ async function loadBrokerStatus() {
 }
 document.getElementById("trading-broker-save")?.addEventListener("click", async () => {
   try {
+    const selected = document.getElementById("ord-broker")?.value || "mock";
+    const broker = selected === "virtual" ? "mock" : selected;
+    const appKey = document.getElementById("kiwoom-key")?.value
+      || document.getElementById("broker-app-key")?.value
+      || "";
+    const appSecret = document.getElementById("kiwoom-secret")?.value
+      || document.getElementById("broker-app-secret")?.value
+      || "";
+    const accountNo = document.getElementById("broker-account")?.value || "";
+    const paper = document.getElementById("broker-paper")?.checked ?? true;
     await api("/api/broker/settings", { method: "POST", body: {
-      broker: "kiwoom",
-      app_key: document.getElementById("kiwoom-key").value,
-      app_secret: document.getElementById("kiwoom-secret").value,
-      account_no: "",
-      paper: true,
+      broker,
+      app_key: appKey,
+      app_secret: appSecret,
+      account_no: accountNo,
+      paper,
     }});
     setToast("설정 저장 완료", "ok");
     loadBrokerStatus();
