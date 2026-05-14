@@ -13,6 +13,7 @@ _auto_trade_task: asyncio.Task | None = None
 _trade_log: list[dict] = []
 _is_running = False
 _INTERVAL_SEC = 600
+_INITIAL_CAPITAL = 10_000_000
 
 
 def get_status() -> dict:
@@ -39,13 +40,56 @@ async def _execute_virtual_trade(
     reason: str,
 ) -> dict:
     now = datetime.now(timezone.utc).isoformat()
+    account = await mdb.quant_virtual_accounts.find_one({"user_id": user_id})
+    if not account:
+        account = {
+            "user_id": user_id,
+            "initial_capital": float(_INITIAL_CAPITAL),
+            "cash_balance": float(_INITIAL_CAPITAL),
+            "created_at": now,
+            "updated_at": now,
+        }
+        await mdb.quant_virtual_accounts.insert_one(account)
+
+    cash_balance = float(account.get("cash_balance", _INITIAL_CAPITAL))
+    executed_quantity = quantity
+
+    if action == "buy":
+        cost = price * quantity
+        if cash_balance < cost:
+            max_qty = int(cash_balance // price) if price > 0 else 0
+            if max_qty <= 0:
+                shortfall = cost - cash_balance
+                return {
+                    "time": now, "symbol": symbol, "name": name,
+                    "action": action, "quantity": 0, "price": price,
+                    "reason": (
+                        f"{reason} | 잔고 부족으로 미체결 "
+                        f"(필요 {cost:,.0f}원 / 부족 {shortfall:,.0f}원 / 가용현금 {cash_balance:,.0f}원)"
+                    ),
+                    "status": "skipped",
+                    "cash_balance": round(cash_balance, 2),
+                }
+            executed_quantity = max_qty
+
+    if action == "sell":
+        existing = await mdb.portfolio.find_one({"user_id": user_id, "symbol": symbol})
+        if not existing or existing.get("quantity", 0) <= 0:
+            return {
+                "time": now, "symbol": symbol, "name": name,
+                "action": action, "quantity": 0, "price": price,
+                "reason": f"{reason} | 보유 수량 없음",
+                "status": "skipped",
+                "cash_balance": round(cash_balance, 2),
+            }
+        executed_quantity = min(quantity, int(existing["quantity"]))
 
     await mdb.orders.insert_one({
         "user_id":    user_id,
         "symbol":     symbol,
         "name":       name,
         "order_type": action,
-        "quantity":   quantity,
+        "quantity":   executed_quantity,
         "price":      price,
         "status":     "filled",
         "broker":     "quant_ai",
@@ -57,8 +101,8 @@ async def _execute_virtual_trade(
         if existing:
             old_qty = existing["quantity"]
             old_avg = existing["avg_price"]
-            new_qty = old_qty + quantity
-            new_avg = (old_avg * old_qty + price * quantity) / new_qty
+            new_qty = old_qty + executed_quantity
+            new_avg = (old_avg * old_qty + price * executed_quantity) / new_qty
             await mdb.portfolio.update_one(
                 {"user_id": user_id, "symbol": symbol},
                 {"$set": {"quantity": new_qty, "avg_price": new_avg, "updated_at": now}},
@@ -66,13 +110,14 @@ async def _execute_virtual_trade(
         else:
             await mdb.portfolio.insert_one({
                 "user_id": user_id, "symbol": symbol, "name": name,
-                "quantity": quantity, "avg_price": price,
+                "quantity": executed_quantity, "avg_price": price,
                 "created_at": now, "updated_at": now,
             })
+        cash_balance -= price * executed_quantity
     elif action == "sell":
         existing = await mdb.portfolio.find_one({"user_id": user_id, "symbol": symbol})
         if existing:
-            new_qty = max(0, existing["quantity"] - quantity)
+            new_qty = max(0, existing["quantity"] - executed_quantity)
             if new_qty == 0:
                 await mdb.portfolio.delete_one({"user_id": user_id, "symbol": symbol})
             else:
@@ -80,10 +125,19 @@ async def _execute_virtual_trade(
                     {"user_id": user_id, "symbol": symbol},
                     {"$set": {"quantity": new_qty, "updated_at": now}},
                 )
+        cash_balance += price * executed_quantity
+
+    await mdb.quant_virtual_accounts.update_one(
+        {"user_id": user_id},
+        {"$set": {"cash_balance": cash_balance, "updated_at": now}},
+        upsert=True,
+    )
 
     return {
         "time": now, "symbol": symbol, "name": name,
-        "action": action, "quantity": quantity, "price": price, "reason": reason,
+        "action": action, "quantity": executed_quantity, "price": price, "reason": reason,
+        "status": "filled",
+        "cash_balance": round(cash_balance, 2),
     }
 
 
@@ -97,6 +151,23 @@ async def _run_quant_cycle(user_id: str = "quant_system") -> None:
     except Exception:
         return  # MongoDB 미연결 시 스킵
 
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await mdb.quant_virtual_accounts.update_one(
+        {"user_id": user_id},
+        {
+            "$setOnInsert": {
+                "user_id": user_id,
+                "initial_capital": float(_INITIAL_CAPITAL),
+                "cash_balance": float(_INITIAL_CAPITAL),
+                "created_at": now_iso,
+            },
+            "$set": {"updated_at": now_iso},
+        },
+        upsert=True,
+    )
+
+    price_map: dict[str, float] = {}
+
     for stock in QUANT_STOCKS:
         try:
             indicators = await get_quant_indicators(stock["symbol"], "2y")
@@ -104,6 +175,7 @@ async def _run_quant_cycle(user_id: str = "quant_system") -> None:
             price = indicators.get("current_price")
             if not price:
                 continue
+            price_map[stock["symbol"]] = float(price)
 
             action = signal.get("action", "관망")
             reasons = signal.get("reasons", [])
@@ -121,14 +193,15 @@ async def _run_quant_cycle(user_id: str = "quant_system") -> None:
                     "buy", price, qty, " | ".join(reasons),
                 )
                 cycle_log["trades"].append({**trade, "type": "auto"})
-                await notification.notify_auto_trade_executed(
-                    symbol   = stock["symbol"],
-                    name     = stock["name"],
-                    action   = "buy",
-                    quantity = qty,
-                    price    = price,
-                    reason   = " | ".join(reasons),
-                )
+                if trade.get("status") == "filled":
+                    await notification.notify_auto_trade_executed(
+                        symbol   = stock["symbol"],
+                        name     = stock["name"],
+                        action   = "buy",
+                        quantity = trade.get("quantity", qty),
+                        price    = price,
+                        reason   = " | ".join(reasons),
+                    )
 
             elif action in ("강력 매도", "매도"):
                 existing = await mdb.portfolio.find_one(
@@ -141,17 +214,42 @@ async def _run_quant_cycle(user_id: str = "quant_system") -> None:
                         "sell", price, qty, " | ".join(reasons),
                     )
                     cycle_log["trades"].append({**trade, "type": "auto"})
-                    await notification.notify_auto_trade_executed(
-                        symbol   = stock["symbol"],
-                        name     = stock["name"],
-                        action   = "sell",
-                        quantity = qty,
-                        price    = price,
-                        reason   = " | ".join(reasons),
-                    )
+                    if trade.get("status") == "filled":
+                        await notification.notify_auto_trade_executed(
+                            symbol   = stock["symbol"],
+                            name     = stock["name"],
+                            action   = "sell",
+                            quantity = trade.get("quantity", qty),
+                            price    = price,
+                            reason   = " | ".join(reasons),
+                        )
 
         except Exception as e:
             cycle_log["signals"].append({"symbol": stock["symbol"], "error": str(e)})
+
+    account = await mdb.quant_virtual_accounts.find_one({"user_id": user_id}) or {}
+    cash_balance = float(account.get("cash_balance", _INITIAL_CAPITAL))
+    holdings_value = 0.0
+    async for p in mdb.portfolio.find({"user_id": user_id}):
+        qty = float(p.get("quantity", 0))
+        if qty <= 0:
+            continue
+        symbol = p.get("symbol", "")
+        if symbol not in price_map:
+            logger.warning("현재가 미수신되어 평균단가 사용: user=%s symbol=%s", user_id, symbol)
+        mark_price = float(price_map.get(symbol, p.get("avg_price", 0)))
+        holdings_value += qty * mark_price
+
+    total_equity = cash_balance + holdings_value
+    initial_capital = float(account.get("initial_capital", _INITIAL_CAPITAL))
+    pnl_pct = round((total_equity / initial_capital - 1) * 100, 2) if initial_capital > 0 else None
+    cycle_log["account"] = {
+        "initial_capital": initial_capital,
+        "cash_balance": round(cash_balance, 2),
+        "holdings_value": round(holdings_value, 2),
+        "total_equity": round(total_equity, 2),
+        "pnl_pct": pnl_pct,
+    }
 
     _trade_log.append(cycle_log)
     if len(_trade_log) > 100:
