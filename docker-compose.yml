@@ -1,75 +1,4 @@
 services:
-  mongo:
-    image: mongo:8.2.5
-    container_name: mongo
-    ports:
-    - 27018:27017
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: fin_user
-      MONGO_INITDB_ROOT_PASSWORD: fin_pass
-      MONGO_INITDB_DATABASE: fin_ai
-    volumes:
-    - mongo_data:/data/db
-    restart: unless-stopped
-    networks:
-    - shared-net
-  redis:
-    image: redis:8.6.1
-    container_name: redis
-    ports:
-    - 6379:6379
-    volumes:
-    - redis_data:/data
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-    networks:
-    - shared-net
-  ollama:
-    profiles:
-    - local-ollama
-    image: ollama/ollama:latest
-    container_name: ollama
-    volumes:
-    - /mnt/c/Users/1/.ollama:/root/.ollama
-    ports:
-    - 11434:11434
-    restart: unless-stopped
-    networks:
-    - shared-net
-  qdrant:
-    profiles:
-    - local-qdrant
-    image: qdrant/qdrant:latest
-    container_name: qdrant
-    ports:
-    - 6333:6333
-    - 6334:6334
-    volumes:
-    - qdrant_data:/qdrant/storage
-    restart: unless-stopped
-    networks:
-    - shared-net
-  model-pull:
-    profiles:
-    - local-ollama
-    image: ollama/ollama:latest
-    container_name: model-pull
-    depends_on:
-      ollama:
-        condition: service_started
-    volumes:
-    - /mnt/c/Users/1/.ollama:/root/.ollama
-    entrypoint: |
-      sh -c "
-        ollama pull ${LLM_MODEL:-llama3.1} &&
-        ollama pull ${EMBED_MODEL:-nomic-embed-text} &&
-        echo 'Models ready.'
-      "
-    environment:
-    - OLLAMA_HOST=http://ollama:11434
-    restart: 'no'
-    networks:
-    - shared-net
   app:
     build:
       context: .
@@ -79,16 +8,13 @@ services:
     - 8966:8000
     env_file: .env
     environment:
-    - MONGO_URI=mongodb://fin_user:fin_pass@mongo:27017/fin_ai?authSource=admin
+    - MONGO_URI=mongodb://mongo:27017/fin_ai
     - REDIS_URL=redis://redis:6379
     extra_hosts:
     - host.docker.internal:host-gateway
     volumes:
     - app_data:/app/data
     - ./data:/app/data/csv:ro
-    depends_on:
-    - mongo
-    - redis
     restart: unless-stopped
     networks:
     - shared-net
@@ -99,16 +25,13 @@ services:
     container_name: fin-ai-ingest
     env_file: .env
     environment:
-    - MONGO_URI=mongodb://fin_user:fin_pass@mongo:27017/fin_ai?authSource=admin
+    - MONGO_URI=mongodb://mongo:27017/fin_ai
     - REDIS_URL=redis://redis:6379
     extra_hosts:
     - host.docker.internal:host-gateway
     volumes:
     - app_data:/app/data
     - ./data:/app/data/csv:ro
-    depends_on:
-    - mongo
-    - redis
     entrypoint:
     - python
     - -m
@@ -117,9 +40,7 @@ services:
     networks:
     - shared-net
 volumes:
-  mongo_data: null
-  redis_data: null
-  qdrant_data: null
   app_data: null
 networks:
   shared-net:
+    external: true
