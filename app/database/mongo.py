@@ -43,8 +43,11 @@ async def ensure_indexes() -> None:
     await db.orders.create_index([("user_id", 1), ("created_at", -1)])
     # 증권사 설정: 사용자당 1건
     await db.broker_settings.create_index("user_id", unique=True)
-    # 채팅 기록
+    # 대화 스레드
+    await db.conversations.create_index([("user_id", 1), ("updated_at", -1)])
+    # 채팅 기록 (conversation_id 포함)
     await db.chats.create_index([("user_id", 1), ("created_at", -1)])
+    await db.chats.create_index([("conversation_id", 1), ("created_at", 1)])
     # 크롤링 문서: URL 유니크
     await db.crawled_docs.create_index("url", unique=True)
     # 감사 로그

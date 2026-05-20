@@ -11,6 +11,17 @@ class Settings(BaseSettings):
     MONGO_URI: str = "mongodb://law_user:law_pass@localhost:27017/fin_agent?authSource=admin"
     MONGO_DB: str = "fin_agent"
 
+    # ── Supabase (선택 – SUPABASE_URL 미설정 시 기능 비활성) ──────────────────
+    SUPABASE_URL: str = ""
+    SUPABASE_ANON_KEY: str = ""
+    SUPABASE_SERVICE_KEY: str = ""  # service_role 키 (RLS 우회)
+
+    # ── JWT ──────────────────────────────────────────────────────────────────
+    JWT_SECRET: str = "change-me-jwt-secret-32chars-min!!"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TTL: int = 900       # 15분 (초)
+    JWT_REFRESH_TTL: int = 604800   # 7일 (초)
+
     OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
     LLM_MODEL: str = "llama3.1"
     EMBED_MODEL: str = "nomic-embed-text"
